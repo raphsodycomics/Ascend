@@ -6,7 +6,7 @@ import {
   onAuthStateChanged,
   signOut,
   signInWithEmailAndPassword
-} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 
 const ROLE_HOME = {
   admin: "admin.html",
