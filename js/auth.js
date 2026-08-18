@@ -4,11 +4,9 @@
 import { auth, db } from "./firebase-config.js";
 import {
   onAuthStateChanged,
-  signOut
+  signOut,
+  signInWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import {
-  doc, getDoc
-} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const ROLE_HOME = {
   admin: "admin.html",
@@ -132,4 +130,70 @@ export function escapeHtml(str) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+// ============================================================
+// ASCEND — Login
+// ============================================================
+
+const loginForm = document.getElementById("loginForm");
+
+if (loginForm) {
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+    const loginBtn = document.getElementById("loginBtn");
+    const formMsg = document.getElementById("formMsg");
+
+    formMsg.textContent = "";
+    loginBtn.disabled = true;
+    loginBtn.textContent = "Logging in...";
+
+    try {
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+      const user = credential.user;
+
+      // Get the user's profile from Firestore
+      const snap = await getDoc(
+        doc(db, "users", user.uid)
+      );
+
+      if (!snap.exists()) {
+        await signOut(auth);
+        throw new Error("Your account profile was not found.");
+      }
+
+      const profile = snap.data();
+
+      // Check account status
+      if (
+        profile.status === "suspended" ||
+        profile.status === "deactivated"
+      ) {
+        await signOut(auth);
+        throw new Error(
+          "Your account is " + profile.status + "."
+        );
+      }
+
+      // Send user to the correct dashboard
+      window.location.href = ROLE_HOME[profile.role] || "index.html";
+
+    } catch (error) {
+      console.error("Login error:", error);
+
+      formMsg.textContent =
+        error.message || "Unable to log in. Please check your details.";
+
+      loginBtn.disabled = false;
+      loginBtn.textContent = "Log in";
+    }
+  });
 }
