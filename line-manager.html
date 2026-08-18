@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Line Manager — ASCEND</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="ascend-mark"><img src="logo.png" alt="ASCEND logo"></span>
+      <div class="sidebar-brand-text"><b>ASCEND</b><span>HEIRS LIFE</span></div>
+    </div>
+    <div class="sidebar-role">Line Manager</div>
+    <div class="sidebar-name" id="userName">—</div>
+    <nav class="sidebar-nav">
+      <a href="#" class="active">Overview</a>
+    </nav>
+    <div class="sidebar-logout">
+      <button id="logoutBtn">Log out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="main-header">
+      <h1 id="lineName">Line overview</h1>
+      <p>Everyone across your Units, rolled up in one place.</p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Units</div><div class="stat-value" id="statUnits">–</div></div>
+      <div class="stat-card"><div class="stat-label">Financial Advisors</div><div class="stat-value" id="statFAs">–</div></div>
+      <div class="stat-card accent"><div class="stat-label">Contacts captured today</div><div class="stat-value" id="statToday">–</div></div>
+      <div class="stat-card"><div class="stat-label">Sold this month</div><div class="stat-value" id="statSold">–</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Invite a Unit Manager</h3></div>
+      <p style="margin-bottom:16px;">This creates a new Unit under your Line and invites its first Unit Manager.</p>
+      <div id="inviteMsg" class="form-msg"></div>
+      <form id="inviteForm">
+        <label for="unitName">Unit name</label>
+        <input type="text" id="unitName" placeholder="e.g. Ikeja Unit" required>
+        <div class="field-row">
+          <div><label for="umName">Unit Manager full name</label><input type="text" id="umName" required></div>
+          <div><label for="umEmail">Unit Manager email</label><input type="email" id="umEmail" required></div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="inviteBtn">Generate invitation</button>
+      </form>
+    </div>
+
+    <div class="card" id="linkCard" style="display:none;">
+      <div class="card-header"><h3>Invitation ready</h3></div>
+      <p>Send this link to <b id="linkName"></b> directly. It expires in 48 hours and works once.</p>
+      <div class="link-box" id="linkBox"></div>
+      <button class="btn btn-secondary btn-sm" id="copyLinkBtn">Copy link</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Units</h3></div>
+      <div id="unitsTableWrap"><div class="loading-line">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Pending invitations</h3></div>
+      <div id="pendingTableWrap"><div class="loading-line">Loading…</div></div>
+    </div>
+  </main>
+</div>
+
+<!-- Unit drill-down modal -->
+<div class="modal-overlay" id="unitModal">
+  <div class="modal-box" style="max-width:560px;">
+    <h3 id="unitModalTitle">Unit</h3>
+    <div id="unitModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeUnitModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- FA prospect read-only modal -->
+<div class="modal-overlay" id="faModal">
+  <div class="modal-box" style="max-width:560px;">
+    <h3 id="faModalTitle">FA activity</h3>
+    <div id="faModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeFaModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<script type="module">
+  import { db } from "./js/firebase-config.js";
+  import {
+    collection, addDoc, doc, setDoc, getDoc, getDocs, query, where, serverTimestamp, Timestamp, orderBy, limit
+  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+  import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday, roleLabel } from "./js/auth.js";
+
+  let me = null;
+
+  guardPage(["line_manager"], async (profile) => {
+    me = profile;
+    document.getElementById("userName").textContent = profile.name;
+    const lineSnap = await getDoc(doc(db, "lines", profile.lineId));
+    if (lineSnap.exists()) document.getElementById("lineName").textContent = lineSnap.data().name;
+    loadOverview();
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", logout);
+
+  async function loadOverview() {
+    const unitsSnap = await getDocs(query(collection(db, "units"), where("lineId", "==", me.lineId), orderBy("createdAt", "desc")));
+    const faSnap = await getDocs(query(collection(db, "users"), where("lineId", "==", me.lineId), where("role", "==", "fa")));
+    const pendingSnap = await getDocs(query(collection(db, "invitations"), where("lineId", "==", me.lineId), where("role", "==", "unit_manager"), where("used", "==", false)));
+
+    document.getElementById("statUnits").textContent = unitsSnap.size;
+    document.getElementById("statFAs").textContent = faSnap.size;
+
+    // Today's contacts + month sold across the whole line.
+    let todayCount = 0, soldCount = 0;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (faSnap.size > 0) {
+      const prospectsSnap = await getDocs(query(collection(db, "prospects"), where("lineId", "==", me.lineId)));
+      prospectsSnap.forEach(p => {
+        const d = p.data();
+        if (isToday(d.createdAt)) todayCount++;
+        if (d.status === "Sold" && d.updatedAt && d.updatedAt.toDate() >= monthStart) soldCount++;
+      });
+    }
+    document.getElementById("statToday").textContent = todayCount;
+    document.getElementById("statSold").textContent = soldCount;
+
+    renderUnits(unitsSnap, faSnap);
+    renderPending(pendingSnap);
+  }
+
+  function renderUnits(unitsSnap, faSnap) {
+    const wrap = document.getElementById("unitsTableWrap");
+    if (unitsSnap.empty) { wrap.innerHTML = '<div class="empty-state">No Units created yet. Invite your first Unit Manager above.</div>'; return; }
+
+    const faByUnit = {};
+    faSnap.forEach(d => { const u = d.data(); faByUnit[u.unitId] = (faByUnit[u.unitId] || 0) + 1; });
+
+    let rows = "";
+    unitsSnap.forEach(d => {
+      const u = d.data();
+      const status = u.unitManagerId
+        ? '<span class="badge green"><span class="badge-dot"></span>Active</span>'
+        : '<span class="badge amber"><span class="badge-dot"></span>Invited</span>';
+      rows += `<tr class="clickable" data-unit="${d.id}" data-name="${escapeHtml(u.name)}">
+        <td><b>${escapeHtml(u.name)}</b></td>
+        <td>${status}</td>
+        <td>${faByUnit[d.id] || 0}</td>
+        <td>${fmtDate(u.createdAt)}</td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Unit</th><th>Unit Manager status</th><th>FAs</th><th>Created</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+    wrap.querySelectorAll("tr.clickable").forEach(tr => {
+      tr.addEventListener("click", () => openUnitModal(tr.dataset.unit, tr.dataset.name));
+    });
+  }
+
+  async function openUnitModal(unitId, unitName) {
+    document.getElementById("unitModalTitle").textContent = unitName;
+    document.getElementById("unitModal").classList.add("open");
+    const body = document.getElementById("unitModalBody");
+    body.innerHTML = '<div class="loading-line">Loading…</div>';
+
+    const faSnap = await getDocs(query(collection(db, "users"), where("unitId", "==", unitId), where("role", "==", "fa")));
+    if (faSnap.empty) { body.innerHTML = '<div class="empty-state">No Financial Advisors in this unit yet.</div>'; return; }
+
+    const prospectsSnap = await getDocs(query(collection(db, "prospects"), where("unitId", "==", unitId)));
+    const todayByFa = {};
+    prospectsSnap.forEach(p => {
+      const d = p.data();
+      if (isToday(d.createdAt)) todayByFa[d.faId] = (todayByFa[d.faId] || 0) + 1;
+    });
+
+    let rows = "";
+    faSnap.forEach(d => {
+      const fa = d.data();
+      const count = todayByFa[d.id] || 0;
+      const badge = count > 0
+        ? `<span class="badge green"><span class="badge-dot"></span>${count} today</span>`
+        : '<span class="badge red"><span class="badge-dot"></span>Not submitted</span>';
+      rows += `<tr class="clickable" data-fa="${d.id}" data-name="${escapeHtml(fa.name)}"><td>${escapeHtml(fa.name)}</td><td>${badge}</td></tr>`;
+    });
+    body.innerHTML = `<table><thead><tr><th>FA</th><th>Today</th></tr></thead><tbody>${rows}</tbody></table>`;
+    body.querySelectorAll("tr.clickable").forEach(tr => {
+      tr.addEventListener("click", () => openFaModal(tr.dataset.fa, tr.dataset.name));
+    });
+  }
+
+  async function openFaModal(faId, faName) {
+    document.getElementById("faModalTitle").textContent = faName + " — recent prospects";
+    document.getElementById("faModal").classList.add("open");
+    const body = document.getElementById("faModalBody");
+    body.innerHTML = '<div class="loading-line">Loading…</div>';
+
+    const snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", faId), orderBy("createdAt", "desc"), limit(25)));
+    if (snap.empty) { body.innerHTML = '<div class="empty-state">No prospects captured yet.</div>'; return; }
+
+    let rows = "";
+    snap.forEach(d => {
+      const p = d.data();
+      rows += `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.status)}</td><td>${fmtDateTime(p.createdAt)}</td></tr>`;
+    });
+    body.innerHTML = `<table><thead><tr><th>Prospect</th><th>Status</th><th>Captured</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  document.getElementById("closeUnitModal").addEventListener("click", () => document.getElementById("unitModal").classList.remove("open"));
+  document.getElementById("closeFaModal").addEventListener("click", () => document.getElementById("faModal").classList.remove("open"));
+
+  function renderPending(snap) {
+    const wrap = document.getElementById("pendingTableWrap");
+    const rows = [];
+    snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+    rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    if (rows.length === 0) { wrap.innerHTML = '<div class="empty-state">No pending invitations.</div>'; return; }
+
+    let html = "";
+    rows.forEach(inv => {
+      html += `<tr>
+        <td><b>${escapeHtml(inv.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(inv.email)}</span></td>
+        <td>${fmtDate(inv.createdAt)}</td>
+        <td><button class="btn btn-ghost btn-sm copy-pending" data-token="${inv.id}">Copy link</button></td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Invitee</th><th>Sent</th><th></th></tr></thead><tbody>${html}</tbody></table>`;
+    wrap.querySelectorAll(".copy-pending").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const link = inviteUrl(btn.dataset.token);
+        copyText(link);
+        btn.textContent = "Copied!";
+        setTimeout(() => btn.textContent = "Copy link", 1500);
+      });
+    });
+  }
+
+  document.getElementById("inviteForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById("inviteMsg");
+    msg.className = "form-msg";
+    const btn = document.getElementById("inviteBtn");
+    btn.disabled = true; btn.textContent = "Generating…";
+
+    const unitName = document.getElementById("unitName").value.trim();
+    const umName = document.getElementById("umName").value.trim();
+    const umEmail = document.getElementById("umEmail").value.trim().toLowerCase();
+
+    try {
+      const dupUser = await getDocs(query(collection(db, "users"), where("email", "==", umEmail)));
+      const dupInvite = await getDocs(query(collection(db, "invitations"), where("email", "==", umEmail), where("used", "==", false)));
+      if (!dupUser.empty || !dupInvite.empty) {
+        msg.textContent = "An account or pending invitation already exists using this email.";
+        msg.className = "form-msg error";
+        btn.disabled = false; btn.textContent = "Generate invitation";
+        return;
+      }
+
+      const unitRef = await addDoc(collection(db, "units"), {
+        name: unitName,
+        lineId: me.lineId,
+        unitManagerId: null,
+        createdBy: me.uid,
+        createdAt: serverTimestamp()
+      });
+
+      const token = genToken();
+      const expires = Timestamp.fromDate(new Date(Date.now() + 48 * 60 * 60 * 1000));
+      await setDoc(doc(db, "invitations", token), {
+        token,
+        name: umName,
+        email: umEmail,
+        role: "unit_manager",
+        unitId: unitRef.id,
+        lineId: me.lineId,
+        invitedByUid: me.uid,
+        invitedByName: me.name,
+        used: false,
+        createdAt: serverTimestamp(),
+        expiresAt: expires
+      });
+
+      const link = inviteUrl(token);
+      document.getElementById("linkName").textContent = umName;
+      document.getElementById("linkBox").textContent = link;
+      document.getElementById("linkCard").style.display = "block";
+      document.getElementById("copyLinkBtn").onclick = () => {
+        copyText(link);
+        document.getElementById("copyLinkBtn").textContent = "Copied!";
+        setTimeout(() => document.getElementById("copyLinkBtn").textContent = "Copy link", 1500);
+      };
+
+      e.target.reset();
+      msg.textContent = "Invitation generated.";
+      msg.className = "form-msg success";
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Something went wrong. Please try again.";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = "Generate invitation";
+  });
+</script>
+</body>
+</html>

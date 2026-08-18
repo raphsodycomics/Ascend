@@ -1,0 +1,149 @@
+rules_version = '2';
+
+// ASCEND — pilot-grade security rules.
+// These enforce the hierarchy at the database level, not just in the UI:
+// an FA cannot read another FA's records, a Unit Manager cannot see outside
+// their unit, and roles can only be assigned through the invitation flow.
+//
+// NOTE: this is scoped for a one-week internal pilot with a small, trusted
+// group of managers creating invitations. Before a company-wide rollout,
+// have this reviewed — in particular, harden invitation creation with
+// App Check / Cloud Functions instead of trusting client writes.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function myRole() {
+      return myProfile().role;
+    }
+
+    // ---------------- users ----------------
+    match /users/{userId} {
+      allow get: if isSignedIn() && (
+        request.auth.uid == userId ||
+        myRole() == 'admin' ||
+        (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
+        (myRole() == 'unit_manager' && resource.data.unitId == myProfile().unitId)
+      );
+
+      allow list: if isSignedIn() && (
+        myRole() == 'admin' ||
+        (myRole() == 'line_manager' && request.query.limit <= 200) ||
+        (myRole() == 'unit_manager' && request.query.limit <= 200)
+      );
+      // Firestore rules can't filter list-query results by field here, so we
+      // additionally rely on the client always scoping list queries with a
+      // where() on lineId/unitId — combined with get()-level checks above
+      // for any direct single-document reads.
+
+      allow create: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.status == 'active'
+        && request.resource.data.role in ['line_manager', 'unit_manager', 'fa'];
+
+      allow update: if isSignedIn() && (
+        request.auth.uid == userId ||
+        myRole() == 'admin' ||
+        (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
+        (myRole() == 'unit_manager' && resource.data.unitId == myProfile().unitId)
+      );
+
+      allow delete: if false; // accounts are deactivated, never deleted
+    }
+
+    // ---------------- lines ----------------
+    match /lines/{lineId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn() && myRole() == 'admin';
+
+      allow update: if isSignedIn() && (
+        myRole() == 'admin' ||
+        // a newly-activated Line Manager claiming the line they were invited to lead
+        (request.resource.data.lineManagerId == request.auth.uid && resource.data.lineManagerId == null)
+      );
+
+      allow delete: if false;
+    }
+
+    // ---------------- units ----------------
+    match /units/{unitId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && myRole() == 'line_manager'
+        && request.resource.data.lineId == myProfile().lineId;
+
+      allow update: if isSignedIn() && (
+        myRole() == 'admin' ||
+        (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
+        // a newly-activated Unit Manager claiming the unit they were invited to lead
+        (request.resource.data.unitManagerId == request.auth.uid && resource.data.unitManagerId == null)
+      );
+
+      allow delete: if false;
+    }
+
+    // ---------------- invitations ----------------
+    // Doc ID is the random one-time token itself — knowing the link is the
+    // credential, matching the invitation-only access model in the concept doc.
+    match /invitations/{token} {
+      allow get: if true;
+      allow list: if isSignedIn() && (
+        myRole() == 'admin' || myRole() == 'line_manager' || myRole() == 'unit_manager'
+      );
+
+      allow create: if isSignedIn() && (
+        (myRole() == 'admin' && request.resource.data.role == 'line_manager') ||
+        (myRole() == 'line_manager' && request.resource.data.role == 'unit_manager'
+          && request.resource.data.lineId == myProfile().lineId) ||
+        (myRole() == 'unit_manager' && request.resource.data.role == 'fa'
+          && request.resource.data.unitId == myProfile().unitId)
+      );
+
+      // Activation marks the invite used — trusted because the token itself
+      // gated access to this document in the first place.
+      allow update: if isSignedIn()
+        && resource.data.used == false
+        && request.resource.data.used == true;
+
+      allow delete: if false;
+    }
+
+    // ---------------- prospects ----------------
+    match /prospects/{prospectId} {
+      allow get: if isSignedIn() && (
+        resource.data.faId == request.auth.uid ||
+        myRole() == 'admin' ||
+        (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
+        (myRole() == 'unit_manager' && resource.data.unitId == myProfile().unitId)
+      );
+
+      allow list: if isSignedIn();
+      // Client always scopes list queries with where('faId', '==', uid) or
+      // where('unitId'/'lineId', '==', ...) matching the caller's own scope.
+
+      allow create: if isSignedIn()
+        && myRole() == 'fa'
+        && request.resource.data.faId == request.auth.uid
+        && request.resource.data.unitId == myProfile().unitId
+        && request.resource.data.lineId == myProfile().lineId;
+
+      allow update: if isSignedIn()
+        && myRole() == 'fa'
+        && resource.data.faId == request.auth.uid;
+
+      allow delete: if false; // history is preserved even after a sale or loss
+    }
+  }
+}

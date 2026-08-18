@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCEND — My prospecting</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="ascend-mark"><img src="logo.png" alt="ASCEND logo"></span>
+      <div class="sidebar-brand-text"><b>ASCEND</b><span>HEIRS LIFE</span></div>
+    </div>
+    <div class="sidebar-role">Financial Advisor</div>
+    <div class="sidebar-name" id="userName">—</div>
+    <nav class="sidebar-nav">
+      <button data-tab="capture" class="tab-nav active">Capture a prospect</button>
+      <button data-tab="prospects" class="tab-nav">My prospects</button>
+      <button data-tab="followups" class="tab-nav">Follow-ups this week</button>
+    </nav>
+    <div class="sidebar-logout">
+      <button id="logoutBtn">Log out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="main-header">
+      <h1>Today</h1>
+      <p>Talk to someone → capture them here → keep going.</p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Today's target</div><div class="stat-value" id="statTarget">10</div></div>
+      <div class="stat-card accent"><div class="stat-label">Captured today</div><div class="stat-value" id="statToday">0</div></div>
+      <div class="stat-card"><div class="stat-label">Appointments today</div><div class="stat-value" id="statAppts">0</div></div>
+      <div class="stat-card"><div class="stat-label">This week</div><div class="stat-value" id="statWeek">0</div></div>
+    </div>
+
+    <!-- ===== Capture tab ===== -->
+    <section id="tab-capture" class="tab-panel">
+      <div class="card">
+        <div class="card-header"><h3>Quick capture</h3></div>
+        <div id="captureMsg" class="form-msg"></div>
+        <form id="captureForm">
+          <div class="field-row">
+            <div><label for="pName">Prospect name</label><input type="text" id="pName" required></div>
+            <div><label for="pPhone">Phone number</label><input type="tel" id="pPhone" required></div>
+          </div>
+          <label for="pLocation">Location / where to find them</label>
+          <input type="text" id="pLocation" placeholder="e.g. Shop 4, Computer Village, Ikeja">
+
+          <div class="field-row">
+            <div><label for="pApptDate">Next appointment date</label><input type="date" id="pApptDate"></div>
+            <div><label for="pApptTime">Next appointment time</label><input type="time" id="pApptTime"></div>
+          </div>
+
+          <label for="pNotes">Notes (optional)</label>
+          <textarea id="pNotes" placeholder="Anything worth remembering before the next conversation"></textarea>
+
+          <button type="submit" class="btn btn-primary" id="captureBtn">Save prospect</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ===== Prospects tab ===== -->
+    <section id="tab-prospects" class="tab-panel" style="display:none;">
+      <div class="card">
+        <div class="card-header"><h3>My prospects</h3></div>
+        <input type="text" id="searchBox" placeholder="Search by name or phone…" style="margin-bottom:14px;">
+        <div id="prospectsTableWrap"><div class="loading-line">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- ===== Follow-ups tab ===== -->
+    <section id="tab-followups" class="tab-panel" style="display:none;">
+      <div class="card">
+        <div class="card-header"><h3>Follow-ups this week</h3></div>
+        <div id="followupsWrap"><div class="loading-line">Loading…</div></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Edit prospect modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <h3>Update prospect</h3>
+    <div id="editMsg" class="form-msg"></div>
+    <form id="editForm">
+      <input type="hidden" id="editId">
+      <label for="eName">Name</label>
+      <input type="text" id="eName" required>
+      <label for="ePhone">Phone</label>
+      <input type="tel" id="ePhone" required>
+      <label for="eLocation">Location</label>
+      <input type="text" id="eLocation">
+
+      <label for="eStatus">Pipeline stage</label>
+      <select id="eStatus">
+        <option>Prospected</option>
+        <option>Contacted</option>
+        <option>Follow-up</option>
+        <option>Appointment</option>
+        <option>Proposal</option>
+        <option>Sold</option>
+        <option>Lost</option>
+      </select>
+
+      <div class="field-row">
+        <div><label for="eApptDate">Next appointment date</label><input type="date" id="eApptDate"></div>
+        <div><label for="eApptTime">Next appointment time</label><input type="time" id="eApptTime"></div>
+      </div>
+
+      <label for="eNotes">Notes</label>
+      <textarea id="eNotes"></textarea>
+
+      <label for="eOutcome">Outcome / reason (if Sold or Lost)</label>
+      <input type="text" id="eOutcome" placeholder="e.g. Sold — Family Protect Plan, or Lost — not interested">
+
+      <button type="submit" class="btn btn-primary" id="editBtn">Save changes</button>
+      <button type="button" class="btn btn-ghost" id="cancelEdit" style="margin-top:10px;">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+  import { db } from "./js/firebase-config.js";
+  import {
+    collection, addDoc, doc, updateDoc, getDocs, query, where, serverTimestamp, orderBy
+  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+  import { guardPage, logout, escapeHtml, fmtDate, fmtDateTime, isToday } from "./js/auth.js";
+
+  let me = null;
+  let allProspects = [];
+
+  guardPage(["fa"], (profile) => {
+    me = profile;
+    document.getElementById("userName").textContent = profile.name;
+    loadProspects();
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", logout);
+
+  // ---- Tabs ----
+  document.querySelectorAll(".tab-nav").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab-nav").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.querySelectorAll(".tab-panel").forEach(p => p.style.display = "none");
+      document.getElementById("tab-" + btn.dataset.tab).style.display = "block";
+      if (btn.dataset.tab === "followups") renderFollowups();
+    });
+  });
+
+  // ---- Load + stats ----
+  async function loadProspects() {
+    const snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", me.uid), orderBy("createdAt", "desc")));
+    allProspects = [];
+    snap.forEach(d => allProspects.push({ id: d.id, ...d.data() }));
+    computeStats();
+    renderProspectsTable(allProspects);
+  }
+
+  function computeStats() {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    let today = 0, apptsToday = 0, week = 0;
+
+    allProspects.forEach(p => {
+      if (isToday(p.createdAt)) today++;
+      if (p.createdAt && p.createdAt.toDate() >= weekAgo) week++;
+      if (p.nextAppointmentDate === todayStr()) apptsToday++;
+    });
+
+    document.getElementById("statToday").textContent = today;
+    document.getElementById("statWeek").textContent = week;
+    document.getElementById("statAppts").textContent = apptsToday;
+  }
+
+  function todayStr() {
+    const d = new Date();
+    return d.toISOString().slice(0, 10);
+  }
+
+  // ---- Capture ----
+  document.getElementById("captureForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById("captureMsg");
+    msg.className = "form-msg";
+    const btn = document.getElementById("captureBtn");
+    btn.disabled = true; btn.textContent = "Saving…";
+
+    try {
+      await addDoc(collection(db, "prospects"), {
+        name: document.getElementById("pName").value.trim(),
+        phone: document.getElementById("pPhone").value.trim(),
+        location: document.getElementById("pLocation").value.trim(),
+        nextAppointmentDate: document.getElementById("pApptDate").value || null,
+        nextAppointmentTime: document.getElementById("pApptTime").value || null,
+        notes: document.getElementById("pNotes").value.trim(),
+        status: "Prospected",
+        outcome: "",
+        faId: me.uid,
+        unitId: me.unitId,
+        lineId: me.lineId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      e.target.reset();
+      msg.textContent = "Saved. Keep going!";
+      msg.className = "form-msg success";
+      loadProspects();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't save that prospect. Please try again.";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = "Save prospect";
+    setTimeout(() => { msg.className = "form-msg"; }, 3000);
+  });
+
+  // ---- Prospects table + search ----
+  function renderProspectsTable(list) {
+    const wrap = document.getElementById("prospectsTableWrap");
+    if (list.length === 0) { wrap.innerHTML = '<div class="empty-state">No prospects yet — capture your first one above.</div>'; return; }
+
+    let rows = "";
+    list.forEach(p => {
+      rows += `<tr class="clickable" data-id="${p.id}">
+        <td><b>${escapeHtml(p.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(p.phone)}</span></td>
+        <td>${statusBadge(p.status)}</td>
+        <td>${apptText(p)}</td>
+        <td>${fmtDate(p.createdAt)}</td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Prospect</th><th>Stage</th><th>Next appointment</th><th>Captured</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrap.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", () => openEdit(tr.dataset.id)));
+  }
+
+  function statusBadge(status) {
+    const map = { Sold: "green", Lost: "grey", Appointment: "amber", Proposal: "amber" };
+    const cls = map[status] || "grey";
+    return `<span class="badge ${cls}"><span class="badge-dot"></span>${escapeHtml(status)}</span>`;
+  }
+
+  function apptText(p) {
+    if (!p.nextAppointmentDate) return "—";
+    return escapeHtml(p.nextAppointmentDate) + (p.nextAppointmentTime ? " · " + escapeHtml(p.nextAppointmentTime) : "");
+  }
+
+  document.getElementById("searchBox").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    if (!q) { renderProspectsTable(allProspects); return; }
+    renderProspectsTable(allProspects.filter(p =>
+      p.name.toLowerCase().includes(q) || (p.phone || "").toLowerCase().includes(q)
+    ));
+  });
+
+  // ---- Follow-ups this week ----
+  function renderFollowups() {
+    const wrap = document.getElementById("followupsWrap");
+    const now = new Date();
+    const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const upcoming = allProspects.filter(p => {
+      if (!p.nextAppointmentDate) return false;
+      const d = new Date(p.nextAppointmentDate + "T" + (p.nextAppointmentTime || "00:00"));
+      return d >= new Date(now.toDateString()) && d <= in7;
+    }).sort((a, b) => {
+      const da = new Date(a.nextAppointmentDate + "T" + (a.nextAppointmentTime || "00:00"));
+      const db_ = new Date(b.nextAppointmentDate + "T" + (b.nextAppointmentTime || "00:00"));
+      return da - db_;
+    });
+
+    if (upcoming.length === 0) { wrap.innerHTML = '<div class="empty-state">Nothing scheduled in the next 7 days.</div>'; return; }
+
+    let rows = "";
+    upcoming.forEach(p => {
+      const overdue = new Date(p.nextAppointmentDate + "T" + (p.nextAppointmentTime || "23:59")) < now && p.status !== "Sold" && p.status !== "Lost";
+      rows += `<tr class="clickable" data-id="${p.id}">
+        <td><b>${escapeHtml(p.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(p.phone)}</span></td>
+        <td>${escapeHtml(p.nextAppointmentDate)} ${p.nextAppointmentTime ? "· " + escapeHtml(p.nextAppointmentTime) : ""}</td>
+        <td>${overdue ? '<span class="badge red"><span class="badge-dot"></span>Overdue</span>' : statusBadge(p.status)}</td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Prospect</th><th>When</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrap.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", () => openEdit(tr.dataset.id)));
+  }
+
+  // ---- Edit modal ----
+  function openEdit(id) {
+    const p = allProspects.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById("editId").value = p.id;
+    document.getElementById("eName").value = p.name;
+    document.getElementById("ePhone").value = p.phone;
+    document.getElementById("eLocation").value = p.location || "";
+    document.getElementById("eStatus").value = p.status;
+    document.getElementById("eApptDate").value = p.nextAppointmentDate || "";
+    document.getElementById("eApptTime").value = p.nextAppointmentTime || "";
+    document.getElementById("eNotes").value = p.notes || "";
+    document.getElementById("eOutcome").value = p.outcome || "";
+    document.getElementById("editMsg").className = "form-msg";
+    document.getElementById("editModal").classList.add("open");
+  }
+  document.getElementById("cancelEdit").addEventListener("click", () => document.getElementById("editModal").classList.remove("open"));
+
+  document.getElementById("editForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById("editMsg");
+    const btn = document.getElementById("editBtn");
+    btn.disabled = true; btn.textContent = "Saving…";
+    const id = document.getElementById("editId").value;
+
+    try {
+      await updateDoc(doc(db, "prospects", id), {
+        name: document.getElementById("eName").value.trim(),
+        phone: document.getElementById("ePhone").value.trim(),
+        location: document.getElementById("eLocation").value.trim(),
+        status: document.getElementById("eStatus").value,
+        nextAppointmentDate: document.getElementById("eApptDate").value || null,
+        nextAppointmentTime: document.getElementById("eApptTime").value || null,
+        notes: document.getElementById("eNotes").value.trim(),
+        outcome: document.getElementById("eOutcome").value.trim(),
+        updatedAt: serverTimestamp()
+      });
+      document.getElementById("editModal").classList.remove("open");
+      loadProspects();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't save changes. Please try again.";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = "Save changes";
+  });
+</script>
+</body>
+</html>

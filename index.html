@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASCEND by Heirs Life — Log in</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="auth-screen">
+
+  <div class="wordmark-block">
+    <span class="ascend-mark lg">
+      <img src="logo.png" alt="Heirs Life Ascend Logo">
+    </span>
+    <div class="wordmark-heirs">HEIRS LIFE</div>
+    <div class="wordmark-ascend">ASCEND</div>
+    <div class="wordmark-tag">Sales CRM &amp; Prospecting Management Platform</div>
+  </div>
+
+  <div class="auth-card">
+    <div id="formMsg" class="form-msg"></div>
+    <form id="loginForm">
+      <label for="email">Staff ID or Email</label>
+      <input type="email" id="email" placeholder="you@heirslife.com" required autocomplete="username">
+
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+
+      <button type="submit" class="btn btn-primary" id="loginBtn">Log in</button>
+    </form>
+    <a href="#" class="auth-trouble" id="troubleLink">Trouble logging in?</a>
+  </div>
+
+  <div class="auth-footnote">
+    New to Heirs Life? You'll need an invitation from your manager to activate your account.
+  </div>
+</div>
+
+<!-- Manager-mediated recovery notice (Section 20): this pilot build shows the
+     principle — a real deploy would notify the requester's manager instead
+     of emailing a reset link directly. -->
+<div class="modal-overlay" id="troubleModal">
+  <div class="modal-box">
+    <h3>Trouble logging in?</h3>
+    <p style="margin-bottom:16px;">
+      For your security, password resets are confirmed by your direct manager rather than emailed
+      straight to this device. Contact your Unit Manager, Line Manager, or the System Administrator
+      directly (phone or WhatsApp) and ask them to confirm your identity before a reset link is issued.
+    </p>
+    <button class="btn btn-ghost" id="closeTrouble">Close</button>
+  </div>
+</div>
+
+<script type="module">
+  import { auth, db } from "./js/firebase-config.js";
+  import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+  import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+  import { roleHome } from "./js/auth.js";
+
+  const form = document.getElementById("loginForm");
+  const msg = document.getElementById("formMsg");
+  const btn = document.getElementById("loginBtn");
+
+  function showError(text) {
+    msg.textContent = text;
+    msg.className = "form-msg error";
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    msg.className = "form-msg";
+    btn.disabled = true;
+    btn.textContent = "Logging in…";
+
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const snap = await getDoc(doc(db, "users", cred.user.uid));
+      if (!snap.exists()) {
+        showError("No profile found for this account. Contact your administrator.");
+        btn.disabled = false; btn.textContent = "Log in";
+        return;
+      }
+      const profile = snap.data();
+      if (profile.status === "suspended" || profile.status === "deactivated") {
+        showError("This account is " + profile.status + ". Contact your manager or admin.");
+        btn.disabled = false; btn.textContent = "Log in";
+        return;
+      }
+      window.location.href = roleHome(profile.role);
+    } catch (err) {
+      console.error(err);
+      showError("Incorrect email or password.");
+      btn.disabled = false;
+      btn.textContent = "Log in";
+    }
+  });
+
+  const troubleLink = document.getElementById("troubleLink");
+  const troubleModal = document.getElementById("troubleModal");
+  troubleLink.addEventListener("click", (e) => { e.preventDefault(); troubleModal.classList.add("open"); });
+  document.getElementById("closeTrouble").addEventListener("click", () => troubleModal.classList.remove("open"));
+</script>
+</body>
+</html>
