@@ -1,35 +1,23 @@
-// ============================================================
-// ASCEND — Firebase configuration
-// ------------------------------------------------------------
-// 1. Go to https://console.firebase.google.com → create a project
-// 2. Add a "Web app" inside that project
-// 3. Copy the config object it gives you and paste it below,
-//    replacing the placeholder values.
-// 4. In the Firebase console, enable:
-//    - Authentication → Sign-in method → Email/Password
-//    - Firestore Database → Create database (production mode)
-// 5. Deploy the rules in firestore.rules (Firestore → Rules tab).
-// ============================================================
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyAm6fWvSGD0dqDEaKWhyY8gaPM93k5ST10",
+    authDomain: "ascend-9091d.firebaseapp.com",
+    projectId: "ascend-9091d",
+    storageBucket: "ascend-9091d.firebasestorage.app",
+    messagingSenderId: "330581902579",
+    appId: "1:330581902579:web:90fc1231401ffec18ce386",
+    measurementId: "G-E6592EJR65"
+  };
 
-const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_PROJECT.firebaseapp.com",
-  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
-  storageBucket: "REPLACE_WITH_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "REPLACE_WITH_SENDER_ID",
-  appId: "REPLACE_WITH_APP_ID"
-};
-
-export const firebaseConfigured = !Object.values(firebaseConfig).some((value) => String(value).startsWith("REPLACE_WITH_"));
-
-if (!firebaseConfigured) {
-  console.warn("ASCEND: Firebase is not configured. Replace the REPLACE_WITH_* values in js/firebase-config.js before testing multi-device accounts and invitations.");
-}
-
-export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
