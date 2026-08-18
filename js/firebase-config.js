@@ -13,8 +13,8 @@
     projectId: "ascend-9091d",
     storageBucket: "ascend-9091d.firebasestorage.app",
     messagingSenderId: "330581902579",
-    appId: "1:330581902579:web:90fc1231401ffec18ce386",
-    measurementId: "G-E6592EJR65"
+    appId: "1:330581902579:web:ac56c43bd4654e348ce386",
+    measurementId: "G-T9ZYZJZHFZ"
   };
 
   // Initialize Firebase
