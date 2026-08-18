@@ -8,6 +8,11 @@ import {
   signInWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 
+import {
+  doc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+
 const ROLE_HOME = {
   admin: "admin.html",
   line_manager: "line-manager.html",
