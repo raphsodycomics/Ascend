@@ -178,11 +178,24 @@
   }
 
   // ---------------- FA drill-down modal (Prospects / Sold / Lost) ----------------
+  // Mirrors the FA page's own data model exactly:
+  //   outcome: "active" | "sold" | "lost"   (lowercase, field is `outcome` not `status`)
+  //   policySold, lostReason                (not soldPolicy)
+  //   logs: [{ text, createdAt }]           (array field on the prospect doc, not a subcollection)
+  // Also mirrors the FA page's trick of never combining where()+orderBy()
+  // on prospects, to avoid needing another composite index — one where()
+  // clause, sorted client-side.
 
-  function statusBadge(status) {
-    const map = { Sold: "green", Lost: "grey", Appointment: "amber", Proposal: "amber" };
-    const cls = map[status] || "grey";
-    return `<span class="badge ${cls}"><span class="badge-dot"></span>${escapeHtml(status)}</span>`;
+  let currentFaProspects = [];
+
+  function getOutcome(p) {
+    if (p.outcome) return p.outcome;
+    if (p.status === "Sold") return "sold";
+    if (p.status === "Lost") return "lost";
+    return "active";
+  }
+  function getLogs(p) {
+    return Array.isArray(p.logs) ? p.logs : [];
   }
 
   async function openFaModal(faId, faName) {
@@ -191,7 +204,21 @@
     document.getElementById("faModalTitle").textContent = faName + " — activity";
     setModalTabUI();
     document.getElementById("faModal").classList.add("open");
-    await renderFaModalTab();
+
+    const body = document.getElementById("faModalBody");
+    body.innerHTML = '<div class="loading-line">Loading…</div>';
+    try {
+      const snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", faId)));
+      currentFaProspects = [];
+      snap.forEach(d => currentFaProspects.push({ id: d.id, ...d.data() }));
+      currentFaProspects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    } catch (err) {
+      console.error(err);
+      currentFaProspects = [];
+      body.innerHTML = '<div class="empty-state">Could not load this FA\'s prospects right now.</div>';
+      return;
+    }
+    renderFaModalTab();
   }
 
   function setModalTabUI() {
@@ -201,40 +228,16 @@
   }
 
   document.querySelectorAll(".modal-tab").forEach(btn => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       faModalTab = btn.dataset.modaltab;
       setModalTabUI();
-      await renderFaModalTab();
+      renderFaModalTab();
     });
   });
 
-  async function renderFaModalTab() {
+  function renderFaModalTab() {
     const body = document.getElementById("faModalBody");
-    body.innerHTML = '<div class="loading-line">Loading…</div>';
-
-    let snap;
-    try {
-      if (faModalTab === "sold") {
-        snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", currentFa.id), where("status", "==", "Sold"), orderBy("updatedAt", "desc")));
-      } else if (faModalTab === "lost") {
-        snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", currentFa.id), where("status", "==", "Lost"), orderBy("updatedAt", "desc")));
-      } else {
-        snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", currentFa.id), orderBy("createdAt", "desc")));
-      }
-    } catch (err) {
-      console.error(err);
-      body.innerHTML = '<div class="empty-state">Could not load this list right now.</div>';
-      return;
-    }
-
-    let rows = [];
-    snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
-
-    // "Prospects" tab = full history from day one, minus anything already
-    // closed out to Sold/Lost (those live in their own tabs).
-    if (faModalTab === "active") {
-      rows = rows.filter(p => p.status !== "Sold" && p.status !== "Lost");
-    }
+    const rows = currentFaProspects.filter(p => getOutcome(p) === faModalTab);
 
     if (rows.length === 0) {
       const label = faModalTab === "active" ? "active prospects" : faModalTab + " prospects";
@@ -242,19 +245,31 @@
       return;
     }
 
-    const thirdCol = faModalTab === "sold" ? "Policy" : faModalTab === "lost" ? "Reason" : "Stage";
-    let html = `<table><thead><tr><th>Prospect</th><th>Phone</th><th>${thirdCol}</th><th>Captured</th></tr></thead><tbody>`;
+    let thirdHeader, dateHeader;
+    if (faModalTab === "sold") { thirdHeader = "Policy"; dateHeader = "Sold on"; }
+    else if (faModalTab === "lost") { thirdHeader = "Reason"; dateHeader = "Closed on"; }
+    else { thirdHeader = "Logs"; dateHeader = "Captured"; }
+
+    let html = `<table><thead><tr><th>Prospect</th><th>Phone</th><th>${thirdHeader}</th><th>${dateHeader}</th></tr></thead><tbody>`;
     rows.forEach(p => {
-      let thirdCell;
-      if (faModalTab === "sold") thirdCell = escapeHtml(p.soldPolicy || "—");
-      else if (faModalTab === "lost") thirdCell = escapeHtml(p.lostReason || "—");
-      else thirdCell = statusBadge(p.status);
+      let thirdCell, dateCell;
+      if (faModalTab === "sold") {
+        thirdCell = escapeHtml(p.policySold || "—");
+        dateCell = fmtDate(p.closedAt || p.updatedAt);
+      } else if (faModalTab === "lost") {
+        thirdCell = escapeHtml(p.lostReason || "—");
+        dateCell = fmtDate(p.closedAt || p.updatedAt);
+      } else {
+        const n = getLogs(p).length;
+        thirdCell = `<span class="badge grey"><span class="badge-dot"></span>${n} log${n === 1 ? "" : "s"}</span>`;
+        dateCell = fmtDate(p.createdAt);
+      }
 
       html += `<tr class="clickable" data-id="${p.id}" data-name="${escapeHtml(p.name)}">
         <td><b>${escapeHtml(p.name)}</b></td>
         <td>${escapeHtml(p.phone || "—")}</td>
         <td>${thirdCell}</td>
-        <td>${fmtDate(p.createdAt)}</td>
+        <td>${dateCell}</td>
       </tr>`;
     });
     html += `</tbody></table>`;
@@ -269,49 +284,34 @@
 
   // ---------------- Prospect detail + log history (read-only) ----------------
 
-  async function openLogModal(prospectId, name) {
+  function openLogModal(prospectId, name) {
     document.getElementById("logModalTitle").textContent = name;
     document.getElementById("logModal").classList.add("open");
     const body = document.getElementById("logModalBody");
-    body.innerHTML = '<div class="loading-line">Loading…</div>';
 
-    const pSnap = await getDoc(doc(db, "prospects", prospectId));
-    if (!pSnap.exists()) { body.innerHTML = '<div class="empty-state">Prospect not found.</div>'; return; }
-    const p = pSnap.data();
+    const p = currentFaProspects.find(x => x.id === prospectId);
+    if (!p) { body.innerHTML = '<div class="empty-state">Prospect not found.</div>'; return; }
 
-    let logsSnap;
-    try {
-      logsSnap = await getDocs(query(collection(db, "prospects", prospectId, "logs"), orderBy("createdAt", "desc")));
-    } catch (err) {
-      console.error(err);
-      logsSnap = null;
-    }
+    const logs = getLogs(p).slice().sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    const logsHtml = logs.length === 0
+      ? '<div class="empty-state">No log entries yet.</div>'
+      : logs.map(l => `
+          <div class="log-entry">
+            <div class="log-entry-date">${fmtDateTime(l.createdAt)}</div>
+            <div class="log-entry-text">${escapeHtml(l.text)}</div>
+          </div>`).join("");
 
-    let logsHtml;
-    if (!logsSnap || logsSnap.empty) {
-      logsHtml = '<div class="empty-state">No log entries yet.</div>';
-    } else {
-      logsHtml = "";
-      logsSnap.forEach(d => {
-        const l = d.data();
-        logsHtml += `<div class="log-entry">
-          <div class="log-entry-date">${fmtDateTime(l.createdAt)}</div>
-          <div class="log-entry-text">${escapeHtml(l.text)}</div>
-        </div>`;
-      });
-    }
-
+    const outcome = getOutcome(p);
     let closeoutHtml = "";
-    if (p.status === "Sold") {
-      closeoutHtml = `<div class="detail-row"><b>Policy sold</b>${escapeHtml(p.soldPolicy || "—")}</div>`;
-    } else if (p.status === "Lost") {
+    if (outcome === "sold") {
+      closeoutHtml = `<div class="detail-row"><b>Policy sold</b>${escapeHtml(p.policySold || "—")}</div>`;
+    } else if (outcome === "lost") {
       closeoutHtml = `<div class="detail-row"><b>Reason lost</b>${escapeHtml(p.lostReason || "—")}</div>`;
     }
 
     body.innerHTML = `
       <div class="detail-row"><b>Phone</b>${escapeHtml(p.phone || "—")}</div>
       <div class="detail-row"><b>Location</b>${escapeHtml(p.location || "—")}</div>
-      <div class="detail-row"><b>Stage</b>${statusBadge(p.status)}</div>
       ${p.nextAppointmentDate ? `<div class="detail-row"><b>Next appointment</b>${escapeHtml(p.nextAppointmentDate)} ${p.nextAppointmentTime ? "· " + escapeHtml(p.nextAppointmentTime) : ""}</div>` : ""}
       ${closeoutHtml}
       <h4 style="margin-top:18px;margin-bottom:8px;">Log entries</h4>
