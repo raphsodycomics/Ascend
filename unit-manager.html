@@ -80,7 +80,8 @@
   import { db } from "./js/firebase-config.js";
   import {
     collection, addDoc, doc, setDoc, getDoc, getDocs, query, where, serverTimestamp, Timestamp, orderBy, limit
-  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+  } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+  
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday } from "./js/auth.js";
 
   let me = null;
