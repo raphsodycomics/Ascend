@@ -11,13 +11,7 @@
 <div class="auth-screen">
   <div class="wordmark-block">
     <span class="ascend-mark lg">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.3">
-        <circle cx="12" cy="12" r="9.5"/>
-        <ellipse cx="12" cy="12" rx="4" ry="9.5"/>
-        <line x1="2.5" y1="12" x2="21.5" y2="12"/>
-        <path d="M3.8 7.2 C7 8.6 17 8.6 20.2 7.2"/>
-        <path d="M3.8 16.8 C7 15.4 17 15.4 20.2 16.8"/>
-      </svg>
+      <img src="logo.png" alt="Heirs Life Ascend Logo">
     </span>
     <div class="wordmark-heirs">HEIRS LIFE</div>
     <div class="wordmark-ascend">ASCEND</div>
@@ -27,7 +21,7 @@
   <div class="auth-card" id="cardArea">
     <div id="stateLoading" class="loading-line">Checking your invitation…</div>
     <div id="stateInvalid" style="display:none;">
-      <div class="form-msg error" style="display:block;">
+      <div class="form-msg error" style="display:block;" id="invalidMsg">
         This invitation link is invalid, expired, or has already been used.
         Ask your manager to send you a new invitation.
       </div>
@@ -59,8 +53,8 @@
 
 <script type="module">
   import { db, auth } from "./js/firebase-config.js";
-  import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-  import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+  import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+  import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
   import { roleHome, roleLabel } from "./js/auth.js";
 
   const params = new URLSearchParams(window.location.search);
@@ -68,19 +62,30 @@
 
   const stateLoading = document.getElementById("stateLoading");
   const stateInvalid = document.getElementById("stateInvalid");
+  const invalidMsg = document.getElementById("invalidMsg");
   const form = document.getElementById("activateForm");
   const msg = document.getElementById("formMsg");
 
   let invite = null;
 
   async function loadInvite() {
-    if (!token) { showInvalid(); return; }
+    console.log("Token read from URL:", token);
+
+    if (!token) { showInvalid("No invitation token was found in this link."); return; }
+
     try {
       const snap = await getDoc(doc(db, "invitations", token));
-      if (!snap.exists()) { showInvalid(); return; }
+
+      // TEMPORARY DEBUG — remove once activation works reliably.
+      console.log("Invitation document exists:", snap.exists());
+      if (snap.exists()) console.log("Invitation data:", snap.data());
+
+      if (!snap.exists()) { showInvalid("No invitation found for this link (token not found in the database)."); return; }
+
       const data = snap.data();
       const expired = data.expiresAt && data.expiresAt.toDate() < new Date();
-      if (data.used || expired) { showInvalid(); return; }
+      if (data.used) { showInvalid("This invitation has already been used."); return; }
+      if (expired) { showInvalid("This invitation has expired."); return; }
 
       invite = data;
       document.getElementById("roleLabel").textContent = roleLabel(data.role);
@@ -89,14 +94,20 @@
       stateLoading.style.display = "none";
       form.style.display = "block";
     } catch (err) {
-      console.error(err);
-      showInvalid();
+      // TEMPORARY DEBUG — this is the real reason, not the generic message below.
+      console.error("Error loading invitation:", err.code || err.message, err);
+      showInvalid("Debug: " + (err.code || err.message));
     }
   }
 
-  function showInvalid() {
+  function showInvalid(debugText) {
     stateLoading.style.display = "none";
     stateInvalid.style.display = "block";
+    if (debugText) {
+      invalidMsg.innerHTML =
+        "This invitation link is invalid, expired, or has already been used. Ask your manager to send you a new invitation." +
+        '<br><span style="opacity:.7;font-size:12px;">(' + debugText + ')</span>';
+    }
   }
 
   function showError(text) {
@@ -132,7 +143,6 @@
 
       await setDoc(doc(db, "users", uid), userDoc);
 
-      // Attach this new manager to the org unit/line they now lead.
       if (invite.role === "line_manager" && invite.lineId) {
         await updateDoc(doc(db, "lines", invite.lineId), { lineManagerId: uid });
       }
@@ -148,11 +158,11 @@
 
       window.location.href = roleHome(invite.role);
     } catch (err) {
-      console.error(err);
+      console.error("Activation error:", err.code || err.message, err);
       if (err.code === "auth/email-already-in-use") {
         showError("An account already exists using these details. Please log in or contact your administrator.");
       } else {
-        showError("Something went wrong activating your account. Please try again.");
+        showError("Something went wrong activating your account (" + (err.code || err.message) + "). Please try again.");
       }
       btn.disabled = false;
       btn.textContent = "Activate account";
