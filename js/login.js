@@ -5,7 +5,7 @@
 // ============================================================
 import { auth, db } from "./firebase-config.js";
 import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+import { doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
 import { roleHome } from "./auth.js";
 
 const form = document.getElementById("loginForm");
@@ -37,6 +37,18 @@ if (form) {
       console.log("Signed in with UID:", credential.user.uid);
 
       const snap = await getDoc(doc(db, "users", credential.user.uid));
+
+      // TEMPORARY DEBUG — lists every document the app can actually see
+      // in the "users" collection, from this exact project/database
+      // connection. Remove once login works.
+      try {
+        const allUsers = await getDocs(collection(db, "users"));
+        console.log("Project ID this app is connected to:", db.app.options.projectId);
+        console.log("Documents visible in 'users' collection:", allUsers.size);
+        allUsers.forEach((d) => console.log("  → doc ID:", d.id, "| data:", d.data()));
+      } catch (debugErr) {
+        console.log("Could not list 'users' collection (likely a rules/permission issue):", debugErr.message);
+      }
 
       if (!snap.exists()) {
         msg.textContent = "No profile found for this account. Contact your administrator.";
