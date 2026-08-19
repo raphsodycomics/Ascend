@@ -61,7 +61,7 @@
 
     <div class="card" id="linkCard" style="display:none;">
       <div class="card-header"><h3>Invitation ready</h3></div>
-      <p>Send this link to <b id="linkName"></b> directly (WhatsApp, email, etc). It expires in 48 hours and works once.</p>
+      <p>Send this link to <b id="linkName"></b> directly (WhatsApp, email, etc). It expires in 3 hours and works once.</p>
       <div class="link-box" id="linkBox"></div>
       <button class="btn btn-secondary btn-sm" id="copyLinkBtn">Copy link</button>
     </div>
@@ -81,7 +81,7 @@
 <script type="module">
   import { db } from "./js/firebase-config.js";
   import {
-    collection, addDoc, doc, setDoc, getDocs, query, where, serverTimestamp, Timestamp, orderBy
+    collection, addDoc, doc, setDoc, getDocs, deleteDoc, query, where, serverTimestamp, Timestamp, orderBy
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate } from "./js/auth.js";
 
@@ -145,7 +145,10 @@
         <td><b>${escapeHtml(inv.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(inv.email)}</span></td>
         <td>${escapeHtml(inv.role.replace('_',' '))}</td>
         <td>${fmtDate(inv.createdAt)}</td>
-        <td><button class="btn btn-ghost btn-sm copy-pending" data-token="${d_token(inv)}">Copy link</button></td>
+        <td>
+          <button class="btn btn-ghost btn-sm copy-pending" data-token="${inv.id}">Copy link</button>
+          <button class="btn btn-ghost btn-sm cancel-pending" data-token="${inv.id}" style="color:var(--red);margin-left:6px;">Cancel</button>
+        </td>
       </tr>`;
     });
     wrap.innerHTML = `<table><thead><tr><th>Invitee</th><th>Role</th><th>Sent</th><th></th></tr></thead><tbody>${html}</tbody></table>`;
@@ -158,8 +161,22 @@
         setTimeout(() => btn.textContent = "Copy link", 1500);
       });
     });
+
+    wrap.querySelectorAll(".cancel-pending").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Cancel this invitation? The link will stop working immediately.")) return;
+        btn.disabled = true; btn.textContent = "Cancelling…";
+        try {
+          await deleteDoc(doc(db, "invitations", btn.dataset.token));
+          loadOverview();
+        } catch (err) {
+          console.error(err);
+          alert("Couldn't cancel this invitation (" + (err.code || err.message) + ").");
+          btn.disabled = false; btn.textContent = "Cancel";
+        }
+      });
+    });
   }
-  function d_token(inv) { return inv.id; }
 
   document.getElementById("inviteForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -191,7 +208,7 @@
       });
 
       const token = genToken();
-      const expires = Timestamp.fromDate(new Date(Date.now() + 48 * 60 * 60 * 1000));
+      const expires = Timestamp.fromDate(new Date(Date.now() + 3 * 60 * 60 * 1000));
       await setDoc(doc(db, "invitations", token), {
         token,
         name: lmName,
