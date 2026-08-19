@@ -54,56 +54,15 @@
 </div>
 
 <script type="module">
-  import { auth, db } from "./js/firebase-config.js";
-  import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-  import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-  import { roleHome } from "./js/auth.js";
-
-  const form = document.getElementById("loginForm");
-  const msg = document.getElementById("formMsg");
-  const btn = document.getElementById("loginBtn");
-
-  function showError(text) {
-    msg.textContent = text;
-    msg.className = "form-msg error";
-  }
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    msg.className = "form-msg";
-    btn.disabled = true;
-    btn.textContent = "Logging in…";
-
-    const email = document.getElementById("email").value.trim();
-    const password = document.getElementById("password").value;
-
-    try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      const snap = await getDoc(doc(db, "users", cred.user.uid));
-      if (!snap.exists()) {
-        showError("No profile found for this account. Contact your administrator.");
-        btn.disabled = false; btn.textContent = "Log in";
-        return;
-      }
-      const profile = snap.data();
-      if (profile.status === "suspended" || profile.status === "deactivated") {
-        showError("This account is " + profile.status + ". Contact your manager or admin.");
-        btn.disabled = false; btn.textContent = "Log in";
-        return;
-      }
-      window.location.href = roleHome(profile.role);
-    } catch (err) {
-      console.error(err);
-      showError("Incorrect email or password.");
-      btn.disabled = false;
-      btn.textContent = "Log in";
-    }
-  });
-
   const troubleLink = document.getElementById("troubleLink");
   const troubleModal = document.getElementById("troubleModal");
   troubleLink.addEventListener("click", (e) => { e.preventDefault(); troubleModal.classList.add("open"); });
   document.getElementById("closeTrouble").addEventListener("click", () => troubleModal.classList.remove("open"));
 </script>
+
+<!-- The one and only login handler. Do not add another script here that
+     also touches #loginForm — see js/login.js -->
+<script type="module" src="js/login.js"></script>
+
 </body>
 </html>
