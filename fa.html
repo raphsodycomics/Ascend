@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ASCEND — My prospecting</title>
 <link rel="stylesheet" href="css/styles.css">
-  <link rel="icon" type="image/png" href="logo.png">
 </head>
 <body>
 
@@ -19,7 +18,9 @@
     <div class="sidebar-name" id="userName">—</div>
     <nav class="sidebar-nav">
       <button data-tab="capture" class="tab-nav active">Capture a prospect</button>
-      <button data-tab="prospects" class="tab-nav">My prospects</button>
+      <button data-tab="active" class="tab-nav">Active prospects</button>
+      <button data-tab="sold" class="tab-nav">Sold</button>
+      <button data-tab="lost" class="tab-nav">Lost</button>
       <button data-tab="followups" class="tab-nav">Follow-ups this week</button>
     </nav>
     <div class="sidebar-logout">
@@ -32,6 +33,8 @@
       <h1>Today</h1>
       <p>Talk to someone → capture them here → keep going.</p>
     </div>
+
+    <div id="pageError" class="form-msg error" style="display:none;margin-bottom:16px;"></div>
 
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-label">Today's target</div><div class="stat-value" id="statTarget">10</div></div>
@@ -58,7 +61,7 @@
             <div><label for="pApptTime">Next appointment time</label><input type="time" id="pApptTime"></div>
           </div>
 
-          <label for="pNotes">Notes (optional)</label>
+          <label for="pNotes">First notes (optional)</label>
           <textarea id="pNotes" placeholder="Anything worth remembering before the next conversation"></textarea>
 
           <button type="submit" class="btn btn-primary" id="captureBtn">Save prospect</button>
@@ -66,12 +69,28 @@
       </div>
     </section>
 
-    <!-- ===== Prospects tab ===== -->
-    <section id="tab-prospects" class="tab-panel" style="display:none;">
+    <!-- ===== Active tab ===== -->
+    <section id="tab-active" class="tab-panel" style="display:none;">
       <div class="card">
-        <div class="card-header"><h3>My prospects</h3></div>
-        <input type="text" id="searchBox" placeholder="Search by name or phone…" style="margin-bottom:14px;">
-        <div id="prospectsTableWrap"><div class="loading-line">Loading…</div></div>
+        <div class="card-header"><h3>Active prospects</h3></div>
+        <input type="text" id="searchBoxActive" placeholder="Search by name or phone…" style="margin-bottom:14px;">
+        <div id="activeTableWrap"><div class="loading-line">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- ===== Sold tab ===== -->
+    <section id="tab-sold" class="tab-panel" style="display:none;">
+      <div class="card">
+        <div class="card-header"><h3>Sold</h3></div>
+        <div id="soldTableWrap"><div class="loading-line">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- ===== Lost tab ===== -->
+    <section id="tab-lost" class="tab-panel" style="display:none;">
+      <div class="card">
+        <div class="card-header"><h3>Lost</h3></div>
+        <div id="lostTableWrap"><div class="loading-line">Loading…</div></div>
       </div>
     </section>
 
@@ -85,44 +104,64 @@
   </main>
 </div>
 
-<!-- Edit prospect modal -->
-<div class="modal-overlay" id="editModal">
+<!-- Prospect detail modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box" style="max-width:520px;">
+    <h3 id="detailTitle">Prospect</h3>
+    <div id="detailMsg" class="form-msg"></div>
+    <div id="detailBody"></div>
+    <button type="button" class="btn btn-ghost" id="closeDetail" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Mark Sold mini-modal -->
+<div class="mini-overlay" id="soldOverlay">
   <div class="modal-box">
-    <h3>Update prospect</h3>
-    <div id="editMsg" class="form-msg"></div>
-    <form id="editForm">
-      <input type="hidden" id="editId">
-      <label for="eName">Name</label>
-      <input type="text" id="eName" required>
-      <label for="ePhone">Phone</label>
-      <input type="tel" id="ePhone" required>
-      <label for="eLocation">Location</label>
-      <input type="text" id="eLocation">
-
-      <label for="eStatus">Pipeline stage</label>
-      <select id="eStatus">
-        <option>Prospected</option>
-        <option>Contacted</option>
-        <option>Follow-up</option>
-        <option>Appointment</option>
-        <option>Proposal</option>
-        <option>Sold</option>
-        <option>Lost</option>
+    <h3>Mark as Sold</h3>
+    <div id="soldMsg" class="form-msg"></div>
+    <form id="soldForm">
+      <label for="soldPolicy">Policy sold</label>
+      <select id="soldPolicy" required>
+        <option value="">Select a policy…</option>
+        <option>Heirs Triple Pay</option>
+        <option>MyHeirs Plus Plan</option>
+        <option>Heirs Save Plan</option>
+        <option>Heirs Salary Plus</option>
+        <option>Heirs Couples Plan</option>
+        <option>Heirs Term Assure</option>
+        <option>Heirs Annuity Plan</option>
+        <option>Heirs Group Life</option>
+        <option>Heirs Secure Plan</option>
       </select>
+      <button type="submit" class="btn btn-primary" id="soldBtn">Confirm sale</button>
+      <button type="button" class="btn btn-ghost" id="cancelSold" style="margin-top:10px;">Cancel</button>
+    </form>
+  </div>
+</div>
 
-      <div class="field-row">
-        <div><label for="eApptDate">Next appointment date</label><input type="date" id="eApptDate"></div>
-        <div><label for="eApptTime">Next appointment time</label><input type="time" id="eApptTime"></div>
+<!-- Mark Lost mini-modal -->
+<div class="mini-overlay" id="lostOverlay">
+  <div class="modal-box">
+    <h3>Mark as Lost</h3>
+    <div id="lostMsg" class="form-msg"></div>
+    <form id="lostForm">
+      <label for="lostReasonSelect">Reason</label>
+      <select id="lostReasonSelect" required>
+        <option value="">Select a reason…</option>
+        <option>Not Interested</option>
+        <option>Already Has a Similar Policy</option>
+        <option>Could Not Reach / No Response</option>
+        <option>Too Expensive</option>
+        <option>Chose Another Provider</option>
+        <option>Bad Timing — Asked to Follow Up Later</option>
+        <option value="Other">Other</option>
+      </select>
+      <div id="lostOtherWrap" style="display:none;">
+        <label for="lostOtherText">Please specify</label>
+        <input type="text" id="lostOtherText" placeholder="Reason">
       </div>
-
-      <label for="eNotes">Notes</label>
-      <textarea id="eNotes"></textarea>
-
-      <label for="eOutcome">Outcome / reason (if Sold or Lost)</label>
-      <input type="text" id="eOutcome" placeholder="e.g. Sold — Family Protect Plan, or Lost — not interested">
-
-      <button type="submit" class="btn btn-primary" id="editBtn">Save changes</button>
-      <button type="button" class="btn btn-ghost" id="cancelEdit" style="margin-top:10px;">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="lostBtn">Confirm lost</button>
+      <button type="button" class="btn btn-ghost" id="cancelLost" style="margin-top:10px;">Cancel</button>
     </form>
   </div>
 </div>
@@ -130,12 +169,13 @@
 <script type="module">
   import { db } from "./js/firebase-config.js";
   import {
-    collection, addDoc, doc, updateDoc, getDocs, query, where, serverTimestamp, orderBy
+    collection, addDoc, doc, updateDoc, getDocs, query, where, serverTimestamp, Timestamp, arrayUnion
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
   import { guardPage, logout, escapeHtml, fmtDate, fmtDateTime, isToday } from "./js/auth.js";
 
   let me = null;
   let allProspects = [];
+  let openId = null; // prospect currently shown in the detail modal
 
   guardPage(["fa"], (profile) => {
     me = profile;
@@ -145,6 +185,26 @@
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
 
+  function showPageError(err) {
+    console.error(err);
+    const box = document.getElementById("pageError");
+    box.style.display = "block";
+    box.textContent = "Couldn't load your data (" + (err.code || err.message) + "). Try refreshing the page.";
+  }
+
+  // Backward-compatible: prospects created before the outcome/log update
+  // won't have an `outcome` field, only the old `status` field. Treat
+  // those consistently instead of losing them from the right tab.
+  function getOutcome(p) {
+    if (p.outcome) return p.outcome;
+    if (p.status === "Sold") return "sold";
+    if (p.status === "Lost") return "lost";
+    return "active";
+  }
+  function getLogs(p) {
+    return Array.isArray(p.logs) ? p.logs : [];
+  }
+
   // ---- Tabs ----
   document.querySelectorAll(".tab-nav").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -152,17 +212,31 @@
       btn.classList.add("active");
       document.querySelectorAll(".tab-panel").forEach(p => p.style.display = "none");
       document.getElementById("tab-" + btn.dataset.tab).style.display = "block";
-      if (btn.dataset.tab === "followups") renderFollowups();
+      renderAllTabs();
     });
   });
 
-  // ---- Load + stats ----
+  // NOTE: deliberately no orderBy() combined with where() here — that
+  // combination needs a Firestore composite index that doesn't exist by
+  // default. Fetch by the equality filter alone, sort in JS.
   async function loadProspects() {
-    const snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", me.uid), orderBy("createdAt", "desc")));
-    allProspects = [];
-    snap.forEach(d => allProspects.push({ id: d.id, ...d.data() }));
-    computeStats();
-    renderProspectsTable(allProspects);
+    try {
+      const snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", me.uid)));
+      allProspects = [];
+      snap.forEach(d => allProspects.push({ id: d.id, ...d.data() }));
+      allProspects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      computeStats();
+      renderAllTabs();
+    } catch (err) {
+      showPageError(err);
+    }
+  }
+
+  function renderAllTabs() {
+    renderActiveTable(document.getElementById("searchBoxActive").value.trim().toLowerCase());
+    renderSoldTable();
+    renderLostTable();
+    renderFollowups();
   }
 
   function computeStats() {
@@ -173,7 +247,7 @@
     allProspects.forEach(p => {
       if (isToday(p.createdAt)) today++;
       if (p.createdAt && p.createdAt.toDate() >= weekAgo) week++;
-      if (p.nextAppointmentDate === todayStr()) apptsToday++;
+      if (getOutcome(p) === "active" && p.nextAppointmentDate === todayStr()) apptsToday++;
     });
 
     document.getElementById("statToday").textContent = today;
@@ -182,8 +256,7 @@
   }
 
   function todayStr() {
-    const d = new Date();
-    return d.toISOString().slice(0, 10);
+    return new Date().toISOString().slice(0, 10);
   }
 
   // ---- Capture ----
@@ -194,6 +267,9 @@
     const btn = document.getElementById("captureBtn");
     btn.disabled = true; btn.textContent = "Saving…";
 
+    const firstNote = document.getElementById("pNotes").value.trim();
+    const logs = firstNote ? [{ text: firstNote, createdAt: Timestamp.now() }] : [];
+
     try {
       await addDoc(collection(db, "prospects"), {
         name: document.getElementById("pName").value.trim(),
@@ -201,9 +277,10 @@
         location: document.getElementById("pLocation").value.trim(),
         nextAppointmentDate: document.getElementById("pApptDate").value || null,
         nextAppointmentTime: document.getElementById("pApptTime").value || null,
-        notes: document.getElementById("pNotes").value.trim(),
-        status: "Prospected",
-        outcome: "",
+        outcome: "active",
+        policySold: null,
+        lostReason: null,
+        logs: logs,
         faId: me.uid,
         unitId: me.unitId,
         lineId: me.lineId,
@@ -216,35 +293,34 @@
       loadProspects();
     } catch (err) {
       console.error(err);
-      msg.textContent = "Couldn't save that prospect. Please try again.";
+      msg.textContent = "Couldn't save that prospect (" + (err.code || err.message) + "). Please try again.";
       msg.className = "form-msg error";
     }
     btn.disabled = false; btn.textContent = "Save prospect";
-    setTimeout(() => { msg.className = "form-msg"; }, 3000);
+    setTimeout(() => { msg.className = "form-msg"; }, 4000);
   });
 
-  // ---- Prospects table + search ----
-  function renderProspectsTable(list) {
-    const wrap = document.getElementById("prospectsTableWrap");
-    if (list.length === 0) { wrap.innerHTML = '<div class="empty-state">No prospects yet — capture your first one above.</div>'; return; }
+  // ---- Active table ----
+  function renderActiveTable(searchTerm) {
+    const wrap = document.getElementById("activeTableWrap");
+    let list = allProspects.filter(p => getOutcome(p) === "active");
+    if (searchTerm) {
+      list = list.filter(p => p.name.toLowerCase().includes(searchTerm) || (p.phone || "").toLowerCase().includes(searchTerm));
+    }
+    if (list.length === 0) { wrap.innerHTML = '<div class="empty-state">No active prospects — capture one, or check Sold/Lost.</div>'; return; }
 
     let rows = "";
     list.forEach(p => {
+      const logCount = getLogs(p).length;
       rows += `<tr class="clickable" data-id="${p.id}">
         <td><b>${escapeHtml(p.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(p.phone)}</span></td>
-        <td>${statusBadge(p.status)}</td>
+        <td><span class="badge grey"><span class="badge-dot"></span>${logCount} log${logCount === 1 ? "" : "s"}</span></td>
         <td>${apptText(p)}</td>
         <td>${fmtDate(p.createdAt)}</td>
       </tr>`;
     });
-    wrap.innerHTML = `<table><thead><tr><th>Prospect</th><th>Stage</th><th>Next appointment</th><th>Captured</th></tr></thead><tbody>${rows}</tbody></table>`;
-    wrap.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", () => openEdit(tr.dataset.id)));
-  }
-
-  function statusBadge(status) {
-    const map = { Sold: "green", Lost: "grey", Appointment: "amber", Proposal: "amber" };
-    const cls = map[status] || "grey";
-    return `<span class="badge ${cls}"><span class="badge-dot"></span>${escapeHtml(status)}</span>`;
+    wrap.innerHTML = `<table><thead><tr><th>Prospect</th><th>Logs</th><th>Next appointment</th><th>Captured</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrap.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", () => openDetail(tr.dataset.id)));
   }
 
   function apptText(p) {
@@ -252,21 +328,54 @@
     return escapeHtml(p.nextAppointmentDate) + (p.nextAppointmentTime ? " · " + escapeHtml(p.nextAppointmentTime) : "");
   }
 
-  document.getElementById("searchBox").addEventListener("input", (e) => {
-    const q = e.target.value.trim().toLowerCase();
-    if (!q) { renderProspectsTable(allProspects); return; }
-    renderProspectsTable(allProspects.filter(p =>
-      p.name.toLowerCase().includes(q) || (p.phone || "").toLowerCase().includes(q)
-    ));
+  document.getElementById("searchBoxActive").addEventListener("input", (e) => {
+    renderActiveTable(e.target.value.trim().toLowerCase());
   });
 
-  // ---- Follow-ups this week ----
+  // ---- Sold table ----
+  function renderSoldTable() {
+    const wrap = document.getElementById("soldTableWrap");
+    const list = allProspects.filter(p => getOutcome(p) === "sold");
+    if (list.length === 0) { wrap.innerHTML = '<div class="empty-state">No sales recorded yet.</div>'; return; }
+
+    let rows = "";
+    list.forEach(p => {
+      rows += `<tr class="clickable" data-id="${p.id}">
+        <td><b>${escapeHtml(p.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(p.phone)}</span></td>
+        <td>${escapeHtml(p.policySold || "—")}</td>
+        <td>${fmtDate(p.closedAt || p.updatedAt)}</td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Prospect</th><th>Policy</th><th>Sold on</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrap.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", () => openDetail(tr.dataset.id)));
+  }
+
+  // ---- Lost table ----
+  function renderLostTable() {
+    const wrap = document.getElementById("lostTableWrap");
+    const list = allProspects.filter(p => getOutcome(p) === "lost");
+    if (list.length === 0) { wrap.innerHTML = '<div class="empty-state">Nothing lost yet.</div>'; return; }
+
+    let rows = "";
+    list.forEach(p => {
+      rows += `<tr class="clickable" data-id="${p.id}">
+        <td><b>${escapeHtml(p.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(p.phone)}</span></td>
+        <td>${escapeHtml(p.lostReason || "—")}</td>
+        <td>${fmtDate(p.closedAt || p.updatedAt)}</td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Prospect</th><th>Reason</th><th>Closed on</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrap.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", () => openDetail(tr.dataset.id)));
+  }
+
+  // ---- Follow-ups this week (active prospects only) ----
   function renderFollowups() {
     const wrap = document.getElementById("followupsWrap");
     const now = new Date();
     const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     const upcoming = allProspects.filter(p => {
+      if (getOutcome(p) !== "active") return false;
       if (!p.nextAppointmentDate) return false;
       const d = new Date(p.nextAppointmentDate + "T" + (p.nextAppointmentTime || "00:00"));
       return d >= new Date(now.toDateString()) && d <= in7;
@@ -280,62 +389,211 @@
 
     let rows = "";
     upcoming.forEach(p => {
-      const overdue = new Date(p.nextAppointmentDate + "T" + (p.nextAppointmentTime || "23:59")) < now && p.status !== "Sold" && p.status !== "Lost";
+      const overdue = new Date(p.nextAppointmentDate + "T" + (p.nextAppointmentTime || "23:59")) < now;
       rows += `<tr class="clickable" data-id="${p.id}">
         <td><b>${escapeHtml(p.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(p.phone)}</span></td>
         <td>${escapeHtml(p.nextAppointmentDate)} ${p.nextAppointmentTime ? "· " + escapeHtml(p.nextAppointmentTime) : ""}</td>
-        <td>${overdue ? '<span class="badge red"><span class="badge-dot"></span>Overdue</span>' : statusBadge(p.status)}</td>
+        <td>${overdue ? '<span class="badge red"><span class="badge-dot"></span>Overdue</span>' : '<span class="badge amber"><span class="badge-dot"></span>Upcoming</span>'}</td>
       </tr>`;
     });
     wrap.innerHTML = `<table><thead><tr><th>Prospect</th><th>When</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
-    wrap.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", () => openEdit(tr.dataset.id)));
+    wrap.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", () => openDetail(tr.dataset.id)));
   }
 
-  // ---- Edit modal ----
-  function openEdit(id) {
-    const p = allProspects.find(x => x.id === id);
+  // ==================================================================
+  // Detail modal — contact info, log timeline, add-log, Mark Sold/Lost
+  // ==================================================================
+  function openDetail(id) {
+    openId = id;
+    renderDetail();
+    document.getElementById("detailMsg").className = "form-msg";
+    document.getElementById("detailModal").classList.add("open");
+  }
+
+  function renderDetail() {
+    const p = allProspects.find(x => x.id === openId);
     if (!p) return;
-    document.getElementById("editId").value = p.id;
-    document.getElementById("eName").value = p.name;
-    document.getElementById("ePhone").value = p.phone;
-    document.getElementById("eLocation").value = p.location || "";
-    document.getElementById("eStatus").value = p.status;
-    document.getElementById("eApptDate").value = p.nextAppointmentDate || "";
-    document.getElementById("eApptTime").value = p.nextAppointmentTime || "";
-    document.getElementById("eNotes").value = p.notes || "";
-    document.getElementById("eOutcome").value = p.outcome || "";
-    document.getElementById("editMsg").className = "form-msg";
-    document.getElementById("editModal").classList.add("open");
-  }
-  document.getElementById("cancelEdit").addEventListener("click", () => document.getElementById("editModal").classList.remove("open"));
+    const outcome = getOutcome(p);
+    const logs = getLogs(p).slice().sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
-  document.getElementById("editForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const msg = document.getElementById("editMsg");
-    const btn = document.getElementById("editBtn");
-    btn.disabled = true; btn.textContent = "Saving…";
-    const id = document.getElementById("editId").value;
+    document.getElementById("detailTitle").textContent = p.name;
+
+    let banner = "";
+    if (outcome === "sold") banner = `<div class="outcome-banner sold">Sold — ${escapeHtml(p.policySold || "policy not recorded")}</div>`;
+    if (outcome === "lost") banner = `<div class="outcome-banner lost">Lost — ${escapeHtml(p.lostReason || "reason not recorded")}</div>`;
+
+    const logListHtml = logs.length === 0
+      ? '<div class="log-empty">No log entries yet.</div>'
+      : '<div class="log-list">' + logs.map(l => `
+          <div class="log-entry">
+            <div class="log-entry-date">${fmtDateTime(l.createdAt)}</div>
+            <div class="log-entry-text">${escapeHtml(l.text)}</div>
+          </div>`).join("") + '</div>';
+
+    let activeSection = "";
+    if (outcome === "active") {
+      activeSection = `
+        <div class="section-label">Add a log entry</div>
+        <textarea id="newLogText" placeholder="What did they say? How did the conversation go?"></textarea>
+        <button type="button" class="btn btn-secondary btn-sm" id="addLogBtn">Add log</button>
+
+        <div class="section-label">Next appointment</div>
+        <div class="field-row">
+          <div><input type="date" id="detailApptDate" value="${p.nextAppointmentDate || ""}"></div>
+          <div><input type="time" id="detailApptTime" value="${p.nextAppointmentTime || ""}"></div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="saveApptBtn">Save appointment</button>
+
+        <div class="outcome-actions">
+          <button type="button" class="btn btn-sold" id="openSoldBtn">Mark Sold</button>
+          <button type="button" class="btn btn-lost" id="openLostBtn">Mark Lost</button>
+        </div>
+      `;
+    }
+
+    document.getElementById("detailBody").innerHTML = `
+      <div style="margin-bottom:14px;color:var(--muted);font-size:13px;">
+        ${escapeHtml(p.phone)}${p.location ? " · " + escapeHtml(p.location) : ""}
+      </div>
+      ${banner}
+      <div class="section-label">Log history</div>
+      ${logListHtml}
+      ${activeSection}
+    `;
+
+    if (outcome === "active") {
+      document.getElementById("addLogBtn").addEventListener("click", addLogEntry);
+      document.getElementById("saveApptBtn").addEventListener("click", saveAppointment);
+      document.getElementById("openSoldBtn").addEventListener("click", () => {
+        document.getElementById("soldForm").reset();
+        document.getElementById("soldMsg").className = "form-msg";
+        document.getElementById("soldOverlay").classList.add("open");
+      });
+      document.getElementById("openLostBtn").addEventListener("click", () => {
+        document.getElementById("lostForm").reset();
+        document.getElementById("lostOtherWrap").style.display = "none";
+        document.getElementById("lostMsg").className = "form-msg";
+        document.getElementById("lostOverlay").classList.add("open");
+      });
+    }
+  }
+
+  document.getElementById("closeDetail").addEventListener("click", () => {
+    document.getElementById("detailModal").classList.remove("open");
+    openId = null;
+  });
+
+  async function addLogEntry() {
+    const text = document.getElementById("newLogText").value.trim();
+    if (!text) return;
+    const btn = document.getElementById("addLogBtn");
+    btn.disabled = true; btn.textContent = "Adding…";
 
     try {
-      await updateDoc(doc(db, "prospects", id), {
-        name: document.getElementById("eName").value.trim(),
-        phone: document.getElementById("ePhone").value.trim(),
-        location: document.getElementById("eLocation").value.trim(),
-        status: document.getElementById("eStatus").value,
-        nextAppointmentDate: document.getElementById("eApptDate").value || null,
-        nextAppointmentTime: document.getElementById("eApptTime").value || null,
-        notes: document.getElementById("eNotes").value.trim(),
-        outcome: document.getElementById("eOutcome").value.trim(),
+      await updateDoc(doc(db, "prospects", openId), {
+        logs: arrayUnion({ text, createdAt: Timestamp.now() }),
         updatedAt: serverTimestamp()
       });
-      document.getElementById("editModal").classList.remove("open");
-      loadProspects();
+      const p = allProspects.find(x => x.id === openId);
+      if (p) { if (!Array.isArray(p.logs)) p.logs = []; p.logs.push({ text, createdAt: Timestamp.now() }); }
+      renderDetail();
+      renderAllTabs();
     } catch (err) {
       console.error(err);
-      msg.textContent = "Couldn't save changes. Please try again.";
+      document.getElementById("detailMsg").textContent = "Couldn't add that log (" + (err.code || err.message) + ").";
+      document.getElementById("detailMsg").className = "form-msg error";
+    }
+  }
+
+  async function saveAppointment() {
+    const date = document.getElementById("detailApptDate").value || null;
+    const time = document.getElementById("detailApptTime").value || null;
+    try {
+      await updateDoc(doc(db, "prospects", openId), {
+        nextAppointmentDate: date,
+        nextAppointmentTime: time,
+        updatedAt: serverTimestamp()
+      });
+      const p = allProspects.find(x => x.id === openId);
+      if (p) { p.nextAppointmentDate = date; p.nextAppointmentTime = time; }
+      document.getElementById("detailMsg").textContent = "Appointment saved.";
+      document.getElementById("detailMsg").className = "form-msg success";
+      renderAllTabs();
+      computeStats();
+    } catch (err) {
+      console.error(err);
+      document.getElementById("detailMsg").textContent = "Couldn't save appointment (" + (err.code || err.message) + ").";
+      document.getElementById("detailMsg").className = "form-msg error";
+    }
+  }
+
+  // ---- Mark Sold ----
+  document.getElementById("cancelSold").addEventListener("click", () => document.getElementById("soldOverlay").classList.remove("open"));
+  document.getElementById("soldForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const policy = document.getElementById("soldPolicy").value;
+    const msg = document.getElementById("soldMsg");
+    if (!policy) { msg.textContent = "Please select a policy."; msg.className = "form-msg error"; return; }
+
+    const btn = document.getElementById("soldBtn");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await updateDoc(doc(db, "prospects", openId), {
+        outcome: "sold",
+        policySold: policy,
+        closedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      const p = allProspects.find(x => x.id === openId);
+      if (p) { p.outcome = "sold"; p.policySold = policy; p.closedAt = Timestamp.now(); }
+      document.getElementById("soldOverlay").classList.remove("open");
+      document.getElementById("detailModal").classList.remove("open");
+      openId = null;
+      renderAllTabs();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't save (" + (err.code || err.message) + "). Please try again.";
       msg.className = "form-msg error";
     }
-    btn.disabled = false; btn.textContent = "Save changes";
+    btn.disabled = false; btn.textContent = "Confirm sale";
+  });
+
+  // ---- Mark Lost ----
+  document.getElementById("lostReasonSelect").addEventListener("change", (e) => {
+    document.getElementById("lostOtherWrap").style.display = e.target.value === "Other" ? "block" : "none";
+  });
+  document.getElementById("cancelLost").addEventListener("click", () => document.getElementById("lostOverlay").classList.remove("open"));
+  document.getElementById("lostForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const selected = document.getElementById("lostReasonSelect").value;
+    const otherText = document.getElementById("lostOtherText").value.trim();
+    const msg = document.getElementById("lostMsg");
+
+    if (!selected) { msg.textContent = "Please select a reason."; msg.className = "form-msg error"; return; }
+    if (selected === "Other" && !otherText) { msg.textContent = "Please specify the reason."; msg.className = "form-msg error"; return; }
+
+    const finalReason = selected === "Other" ? otherText : selected;
+    const btn = document.getElementById("lostBtn");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await updateDoc(doc(db, "prospects", openId), {
+        outcome: "lost",
+        lostReason: finalReason,
+        closedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      const p = allProspects.find(x => x.id === openId);
+      if (p) { p.outcome = "lost"; p.lostReason = finalReason; p.closedAt = Timestamp.now(); }
+      document.getElementById("lostOverlay").classList.remove("open");
+      document.getElementById("detailModal").classList.remove("open");
+      openId = null;
+      renderAllTabs();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't save (" + (err.code || err.message) + "). Please try again.";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = "Confirm lost";
   });
 </script>
 </body>
