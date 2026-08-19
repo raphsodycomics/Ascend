@@ -1,19 +1,20 @@
 // ============================================================
 // ASCEND — shared auth & guard helpers
+// This file only exports helpers. It must not contain page-specific
+// DOM code (e.g. wiring up #loginForm) — importing this file happens
+// on every page, so any top-level code here runs everywhere too.
 // ============================================================
 import { auth, db } from "./firebase-config.js";
 import {
   onAuthStateChanged,
-  signOut,
-  signInWithEmailAndPassword
+  signOut
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
-
 import {
   doc,
   getDoc
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
 
-const ROLE_HOME = {
+export const ROLE_HOME = {
   admin: "admin.html",
   line_manager: "line-manager.html",
   unit_manager: "unit-manager.html",
@@ -23,7 +24,7 @@ const ROLE_HOME = {
 /**
  * Guards a page: requires a signed-in, active user whose role is in
  * allowedRoles. Redirects to index.html if not signed in, or to the
- * correct home page if signed in but wrong role. Calls onReady(userDoc)
+ * correct home page if signed in but wrong role. Calls onReady(profile)
  * once the check has passed.
  */
 export function guardPage(allowedRoles, onReady) {
@@ -83,7 +84,6 @@ export function genToken(len = 28) {
   return out;
 }
 
-
 export function inviteUrl(token) {
   return new URL(`activate.html?token=${encodeURIComponent(token)}`, window.location.href).href;
 }
@@ -135,70 +135,4 @@ export function escapeHtml(str) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
-}
-
-// ============================================================
-// ASCEND — Login
-// ============================================================
-
-const loginForm = document.getElementById("loginForm");
-
-if (loginForm) {
-  loginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    const email = document.getElementById("email").value.trim();
-    const password = document.getElementById("password").value;
-    const loginBtn = document.getElementById("loginBtn");
-    const formMsg = document.getElementById("formMsg");
-
-    formMsg.textContent = "";
-    loginBtn.disabled = true;
-    loginBtn.textContent = "Logging in...";
-
-    try {
-      const credential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-
-      const user = credential.user;
-
-      // Get the user's profile from Firestore
-      const snap = await getDoc(
-        doc(db, "users", user.uid)
-      );
-
-      if (!snap.exists()) {
-        await signOut(auth);
-        throw new Error("Your account profile was not found.");
-      }
-
-      const profile = snap.data();
-
-      // Check account status
-      if (
-        profile.status === "suspended" ||
-        profile.status === "deactivated"
-      ) {
-        await signOut(auth);
-        throw new Error(
-          "Your account is " + profile.status + "."
-        );
-      }
-
-      // Send user to the correct dashboard
-      window.location.href = ROLE_HOME[profile.role] || "index.html";
-
-    } catch (error) {
-      console.error("Login error:", error);
-
-      formMsg.textContent =
-        error.message || "Unable to log in. Please check your details.";
-
-      loginBtn.disabled = false;
-      loginBtn.textContent = "Log in";
-    }
-  });
 }
