@@ -54,7 +54,7 @@
 
     <div class="card" id="linkCard" style="display:none;">
       <div class="card-header"><h3>Invitation ready</h3></div>
-      <p>Send this link to <b id="linkName"></b> directly. It expires in 48 hours and works once.</p>
+      <p>Send this link to <b id="linkName"></b> directly. It expires in 1 hours and works once.</p>
       <div class="link-box" id="linkBox"></div>
       <button class="btn btn-secondary btn-sm" id="copyLinkBtn">Copy link</button>
     </div>
@@ -93,7 +93,7 @@
   import { db } from "./js/firebase-config.js";
   import {
     collection, addDoc, doc, setDoc, getDoc, getDocs, query, where, serverTimestamp, Timestamp, orderBy, limit
-  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+  } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday, roleLabel } from "./js/auth.js";
 
   let me = null;
