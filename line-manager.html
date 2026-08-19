@@ -5,7 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Line Manager — ASCEND</title>
 <link rel="stylesheet" href="css/styles.css">
-  <link rel="icon" type="image/png" href="logo.png">
+<link rel="icon" type="image/png" href="logo.png">
+<style>
+  /* Scoped additions for the FA read-only drill-down. Kept inline so
+     this file doesn't depend on edits to the shared stylesheet. */
+  .modal-tabs { display:flex; gap:8px; margin:14px 0 16px; border-bottom:1px solid var(--border, #e5e5e5); }
+  .modal-tab { background:none; border:none; padding:8px 4px; margin-right:14px; font-size:14px; color:var(--muted,#888);
+               cursor:pointer; border-bottom:2px solid transparent; }
+  .modal-tab.active { color:var(--text,#111); border-bottom-color:var(--accent,#111); font-weight:600; }
+  .detail-row { padding:6px 0; font-size:14px; border-bottom:1px solid #f0f0f0; }
+  .detail-row b { display:inline-block; min-width:130px; color:var(--muted,#888); font-weight:500; }
+  .log-entry { padding:10px 0; border-bottom:1px solid #f0f0f0; }
+  .log-entry:last-child { border-bottom:none; }
+  .log-entry-date { font-size:12px; color:var(--muted,#888); margin-bottom:3px; }
+  .log-entry-text { font-size:14px; line-height:1.45; }
+</style>
+<link rel="icon" type="image/png" href="logo.png">
 </head>
 <body>
 
@@ -55,7 +70,7 @@
 
     <div class="card" id="linkCard" style="display:none;">
       <div class="card-header"><h3>Invitation ready</h3></div>
-      <p>Send this link to <b id="linkName"></b> directly. It expires in 1 hours and works once.</p>
+      <p>Send this link to <b id="linkName"></b> directly. It expires in 48 hours and works once.</p>
       <div class="link-box" id="linkBox"></div>
       <button class="btn btn-secondary btn-sm" id="copyLinkBtn">Copy link</button>
     </div>
@@ -81,12 +96,26 @@
   </div>
 </div>
 
-<!-- FA prospect read-only modal -->
+<!-- FA read-only drill-down: Prospects / Sold / Lost -->
 <div class="modal-overlay" id="faModal">
-  <div class="modal-box" style="max-width:560px;">
+  <div class="modal-box" style="max-width:720px;">
     <h3 id="faModalTitle">FA activity</h3>
+    <div class="modal-tabs">
+      <button class="modal-tab active" data-modaltab="active">Prospects</button>
+      <button class="modal-tab" data-modaltab="sold">Sold</button>
+      <button class="modal-tab" data-modaltab="lost">Lost</button>
+    </div>
     <div id="faModalBody"><div class="loading-line">Loading…</div></div>
     <button class="btn btn-ghost" id="closeFaModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Prospect detail: info + full log history -->
+<div class="modal-overlay" id="logModal">
+  <div class="modal-box" style="max-width:560px;">
+    <h3 id="logModalTitle">Prospect</h3>
+    <div id="logModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeLogModal" style="margin-top:14px;">Close</button>
   </div>
 </div>
 
@@ -98,6 +127,9 @@
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday, roleLabel } from "./js/auth.js";
 
   let me = null;
+  let currentFa = { id: null, name: null };
+  let currentFaProspects = [];
+  let faModalTab = "active";
 
   guardPage(["line_manager"], async (profile) => {
     me = profile;
@@ -108,6 +140,19 @@
   });
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
+
+  // Backward-compatible with any old records, same helper used on fa.html
+  // and unit-manager.html: outcome is the real field ("active"/"sold"/"lost"),
+  // fall back to the old capitalized `status` field if it's ever present.
+  function getOutcome(p) {
+    if (p.outcome) return p.outcome;
+    if (p.status === "Sold") return "sold";
+    if (p.status === "Lost") return "lost";
+    return "active";
+  }
+  function getLogs(p) {
+    return Array.isArray(p.logs) ? p.logs : [];
+  }
 
   async function loadOverview() {
     const unitsSnap = await getDocs(query(collection(db, "units"), where("lineId", "==", me.lineId), orderBy("createdAt", "desc")));
@@ -126,7 +171,8 @@
       prospectsSnap.forEach(p => {
         const d = p.data();
         if (isToday(d.createdAt)) todayCount++;
-        if (d.status === "Sold" && d.updatedAt && d.updatedAt.toDate() >= monthStart) soldCount++;
+        const closedTs = d.closedAt || d.updatedAt;
+        if (getOutcome(d) === "sold" && closedTs && closedTs.toDate() >= monthStart) soldCount++;
       });
     }
     document.getElementById("statToday").textContent = todayCount;
@@ -194,25 +240,138 @@
     });
   }
 
+  document.getElementById("closeUnitModal").addEventListener("click", () => document.getElementById("unitModal").classList.remove("open"));
+
+  // ---------------- FA drill-down modal (Prospects / Sold / Lost) ----------------
+  // Same data model as fa.html: outcome ("active"/"sold"/"lost"), policySold,
+  // lostReason, and logs as an array field on the prospect doc (not a
+  // subcollection). Single where() clause, sorted/filtered client-side —
+  // no extra composite index needed.
+
   async function openFaModal(faId, faName) {
-    document.getElementById("faModalTitle").textContent = faName + " — recent prospects";
+    currentFa = { id: faId, name: faName };
+    faModalTab = "active";
+    document.getElementById("faModalTitle").textContent = faName + " — activity";
+    setModalTabUI();
     document.getElementById("faModal").classList.add("open");
+
     const body = document.getElementById("faModalBody");
     body.innerHTML = '<div class="loading-line">Loading…</div>';
-
-    const snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", faId), orderBy("createdAt", "desc"), limit(25)));
-    if (snap.empty) { body.innerHTML = '<div class="empty-state">No prospects captured yet.</div>'; return; }
-
-    let rows = "";
-    snap.forEach(d => {
-      const p = d.data();
-      rows += `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.status)}</td><td>${fmtDateTime(p.createdAt)}</td></tr>`;
-    });
-    body.innerHTML = `<table><thead><tr><th>Prospect</th><th>Status</th><th>Captured</th></tr></thead><tbody>${rows}</tbody></table>`;
+    try {
+      const snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", faId)));
+      currentFaProspects = [];
+      snap.forEach(d => currentFaProspects.push({ id: d.id, ...d.data() }));
+      currentFaProspects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    } catch (err) {
+      console.error(err);
+      currentFaProspects = [];
+      body.innerHTML = '<div class="empty-state">Could not load this FA\'s prospects right now.</div>';
+      return;
+    }
+    renderFaModalTab();
   }
 
-  document.getElementById("closeUnitModal").addEventListener("click", () => document.getElementById("unitModal").classList.remove("open"));
+  function setModalTabUI() {
+    document.querySelectorAll(".modal-tab").forEach(b => {
+      b.classList.toggle("active", b.dataset.modaltab === faModalTab);
+    });
+  }
+
+  document.querySelectorAll(".modal-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      faModalTab = btn.dataset.modaltab;
+      setModalTabUI();
+      renderFaModalTab();
+    });
+  });
+
+  function renderFaModalTab() {
+    const body = document.getElementById("faModalBody");
+    const rows = currentFaProspects.filter(p => getOutcome(p) === faModalTab);
+
+    if (rows.length === 0) {
+      const label = faModalTab === "active" ? "active prospects" : faModalTab + " prospects";
+      body.innerHTML = `<div class="empty-state">No ${label} yet.</div>`;
+      return;
+    }
+
+    let thirdHeader, dateHeader;
+    if (faModalTab === "sold") { thirdHeader = "Policy"; dateHeader = "Sold on"; }
+    else if (faModalTab === "lost") { thirdHeader = "Reason"; dateHeader = "Closed on"; }
+    else { thirdHeader = "Logs"; dateHeader = "Captured"; }
+
+    let html = `<table><thead><tr><th>Prospect</th><th>Phone</th><th>${thirdHeader}</th><th>${dateHeader}</th></tr></thead><tbody>`;
+    rows.forEach(p => {
+      let thirdCell, dateCell;
+      if (faModalTab === "sold") {
+        thirdCell = escapeHtml(p.policySold || "—");
+        dateCell = fmtDate(p.closedAt || p.updatedAt);
+      } else if (faModalTab === "lost") {
+        thirdCell = escapeHtml(p.lostReason || "—");
+        dateCell = fmtDate(p.closedAt || p.updatedAt);
+      } else {
+        const n = getLogs(p).length;
+        thirdCell = `<span class="badge grey"><span class="badge-dot"></span>${n} log${n === 1 ? "" : "s"}</span>`;
+        dateCell = fmtDate(p.createdAt);
+      }
+
+      html += `<tr class="clickable" data-id="${p.id}" data-name="${escapeHtml(p.name)}">
+        <td><b>${escapeHtml(p.name)}</b></td>
+        <td>${escapeHtml(p.phone || "—")}</td>
+        <td>${thirdCell}</td>
+        <td>${dateCell}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    body.innerHTML = html;
+
+    body.querySelectorAll("tr.clickable").forEach(tr => {
+      tr.addEventListener("click", () => openLogModal(tr.dataset.id, tr.dataset.name));
+    });
+  }
+
   document.getElementById("closeFaModal").addEventListener("click", () => document.getElementById("faModal").classList.remove("open"));
+
+  // ---------------- Prospect detail + log history (read-only) ----------------
+
+  function openLogModal(prospectId, name) {
+    document.getElementById("logModalTitle").textContent = name;
+    document.getElementById("logModal").classList.add("open");
+    const body = document.getElementById("logModalBody");
+
+    const p = currentFaProspects.find(x => x.id === prospectId);
+    if (!p) { body.innerHTML = '<div class="empty-state">Prospect not found.</div>'; return; }
+
+    const logs = getLogs(p).slice().sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    const logsHtml = logs.length === 0
+      ? '<div class="empty-state">No log entries yet.</div>'
+      : logs.map(l => `
+          <div class="log-entry">
+            <div class="log-entry-date">${fmtDateTime(l.createdAt)}</div>
+            <div class="log-entry-text">${escapeHtml(l.text)}</div>
+          </div>`).join("");
+
+    const outcome = getOutcome(p);
+    let closeoutHtml = "";
+    if (outcome === "sold") {
+      closeoutHtml = `<div class="detail-row"><b>Policy sold</b>${escapeHtml(p.policySold || "—")}</div>`;
+    } else if (outcome === "lost") {
+      closeoutHtml = `<div class="detail-row"><b>Reason lost</b>${escapeHtml(p.lostReason || "—")}</div>`;
+    }
+
+    body.innerHTML = `
+      <div class="detail-row"><b>Phone</b>${escapeHtml(p.phone || "—")}</div>
+      <div class="detail-row"><b>Location</b>${escapeHtml(p.location || "—")}</div>
+      ${p.nextAppointmentDate ? `<div class="detail-row"><b>Next appointment</b>${escapeHtml(p.nextAppointmentDate)} ${p.nextAppointmentTime ? "· " + escapeHtml(p.nextAppointmentTime) : ""}</div>` : ""}
+      ${closeoutHtml}
+      <h4 style="margin-top:18px;margin-bottom:8px;">Log entries</h4>
+      ${logsHtml}
+    `;
+  }
+
+  document.getElementById("closeLogModal").addEventListener("click", () => document.getElementById("logModal").classList.remove("open"));
+
+  // ---------------- Pending invitations ----------------
 
   function renderPending(snap) {
     const wrap = document.getElementById("pendingTableWrap");
