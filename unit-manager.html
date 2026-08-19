@@ -19,7 +19,7 @@
   .log-entry-date { font-size:12px; color:var(--muted,#888); margin-bottom:3px; }
   .log-entry-text { font-size:14px; line-height:1.45; }
 </style>
-  <link rel="icon" type="image/png" href="logo.png">
+<link rel="icon" type="image/png" href="logo.png">
 </head>
 <body>
 
@@ -50,6 +50,7 @@
       <div class="stat-card"><div class="stat-label">Submitted today</div><div class="stat-value" id="statSubmitted">–</div></div>
       <div class="stat-card"><div class="stat-label">Not yet submitted</div><div class="stat-value" id="statNotSubmitted">–</div></div>
       <div class="stat-card accent"><div class="stat-label">Contacts captured today</div><div class="stat-value" id="statToday">–</div></div>
+      <div class="stat-card"><div class="stat-label">Sold this month</div><div class="stat-value" id="statSold">–</div></div>
     </div>
 
     <div class="card">
@@ -134,6 +135,9 @@
 
     let todayByFa = {};
     let todayTotal = 0;
+    let soldCount = 0;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     if (faSnap.size > 0) {
       const prospectsSnap = await getDocs(query(collection(db, "prospects"), where("unitId", "==", me.unitId)));
       prospectsSnap.forEach(p => {
@@ -142,6 +146,8 @@
           todayByFa[d.faId] = (todayByFa[d.faId] || 0) + 1;
           todayTotal++;
         }
+        const closedTs = d.closedAt || d.updatedAt;
+        if (getOutcome(d) === "sold" && closedTs && closedTs.toDate() >= monthStart) soldCount++;
       });
     }
 
@@ -150,6 +156,7 @@
     document.getElementById("statSubmitted").textContent = submitted;
     document.getElementById("statNotSubmitted").textContent = faSnap.size - submitted;
     document.getElementById("statToday").textContent = todayTotal;
+    document.getElementById("statSold").textContent = soldCount;
 
     renderFAs(faSnap, todayByFa);
     renderPending(pendingSnap);
