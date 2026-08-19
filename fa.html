@@ -115,7 +115,7 @@
 </div>
 
 <!-- Mark Sold mini-modal -->
-<div class="mini-overlay" id="soldOverlay">
+<div class="mini-overlay" id="soldOverlay" style="display:none;">
   <div class="modal-box">
     <h3>Mark as Sold</h3>
     <div id="soldMsg" class="form-msg"></div>
@@ -140,7 +140,7 @@
 </div>
 
 <!-- Mark Lost mini-modal -->
-<div class="mini-overlay" id="lostOverlay">
+<div class="mini-overlay" id="lostOverlay" style="display:none;">
   <div class="modal-box">
     <h3>Mark as Lost</h3>
     <div id="lostMsg" class="form-msg"></div>
@@ -467,13 +467,13 @@
       document.getElementById("openSoldBtn").addEventListener("click", () => {
         document.getElementById("soldForm").reset();
         document.getElementById("soldMsg").className = "form-msg";
-        document.getElementById("soldOverlay").classList.add("open");
+        document.getElementById("soldOverlay").style.display = "flex";
       });
       document.getElementById("openLostBtn").addEventListener("click", () => {
         document.getElementById("lostForm").reset();
         document.getElementById("lostOtherWrap").style.display = "none";
         document.getElementById("lostMsg").className = "form-msg";
-        document.getElementById("lostOverlay").classList.add("open");
+        document.getElementById("lostOverlay").style.display = "flex";
       });
     }
   }
@@ -528,7 +528,7 @@
   }
 
   // ---- Mark Sold ----
-  document.getElementById("cancelSold").addEventListener("click", () => document.getElementById("soldOverlay").classList.remove("open"));
+  document.getElementById("cancelSold").addEventListener("click", () => document.getElementById("soldOverlay").style.display = "none");
   document.getElementById("soldForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const policy = document.getElementById("soldPolicy").value;
@@ -546,7 +546,7 @@
       });
       const p = allProspects.find(x => x.id === openId);
       if (p) { p.outcome = "sold"; p.policySold = policy; p.closedAt = Timestamp.now(); }
-      document.getElementById("soldOverlay").classList.remove("open");
+      document.getElementById("soldOverlay").style.display = "none";
       document.getElementById("detailModal").classList.remove("open");
       openId = null;
       renderAllTabs();
@@ -562,7 +562,7 @@
   document.getElementById("lostReasonSelect").addEventListener("change", (e) => {
     document.getElementById("lostOtherWrap").style.display = e.target.value === "Other" ? "block" : "none";
   });
-  document.getElementById("cancelLost").addEventListener("click", () => document.getElementById("lostOverlay").classList.remove("open"));
+  document.getElementById("cancelLost").addEventListener("click", () => document.getElementById("lostOverlay").style.display = "none");
   document.getElementById("lostForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const selected = document.getElementById("lostReasonSelect").value;
@@ -584,7 +584,7 @@
       });
       const p = allProspects.find(x => x.id === openId);
       if (p) { p.outcome = "lost"; p.lostReason = finalReason; p.closedAt = Timestamp.now(); }
-      document.getElementById("lostOverlay").classList.remove("open");
+      document.getElementById("lostOverlay").style.display = "none";
       document.getElementById("detailModal").classList.remove("open");
       openId = null;
       renderAllTabs();
