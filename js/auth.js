@@ -27,7 +27,7 @@ export const ROLE_HOME = {
  * correct home page if signed in but wrong role. Calls onReady(profile)
  * once the check has passed.
  */
-export function guardPage(allowedRoles, onReady) {
+export function guardPage(allowedRoles, onReady, idleMinutes = 20) {
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
       window.location.href = "index.html";
@@ -54,7 +54,66 @@ export function guardPage(allowedRoles, onReady) {
     }
 
     onReady(profile);
+    initIdleLogout(idleMinutes);
   });
+}
+
+// ============================================================
+// Idle auto-logout — for anyone who forgets to log out on a
+// shared or personal device. Resets on any activity; warns 60
+// seconds before logging out so an in-progress form isn't lost
+// without notice.
+// ============================================================
+const IDLE_WARNING_MS = 60 * 1000;
+let idleTimer = null;
+let idleWarnTimer = null;
+
+function clearIdleTimers() {
+  if (idleTimer) clearTimeout(idleTimer);
+  if (idleWarnTimer) clearTimeout(idleWarnTimer);
+  const banner = document.getElementById("idleWarningBanner");
+  if (banner) banner.remove();
+}
+
+function showIdleWarning(minutes) {
+  const existing = document.getElementById("idleWarningBanner");
+  if (existing) existing.remove();
+
+  const banner = document.createElement("div");
+  banner.id = "idleWarningBanner";
+  banner.style.cssText =
+    "position:fixed;bottom:18px;left:50%;transform:translateX(-50%);" +
+    "background:#1A1A1A;color:#fff;padding:12px 16px;border-radius:10px;" +
+    "font-size:13px;font-family:inherit;z-index:9999;display:flex;gap:12px;" +
+    "align-items:center;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:90vw;";
+  banner.innerHTML = `<span>You'll be logged out soon due to inactivity.</span>`;
+
+  const btn = document.createElement("button");
+  btn.textContent = "Stay logged in";
+  btn.style.cssText =
+    "background:#D91E36;color:#fff;border:none;padding:7px 14px;" +
+    "border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;";
+  btn.addEventListener("click", () => resetIdleTimer(minutes));
+  banner.appendChild(btn);
+  document.body.appendChild(banner);
+}
+
+function resetIdleTimer(minutes) {
+  clearIdleTimers();
+  const totalMs = minutes * 60 * 1000;
+  idleWarnTimer = setTimeout(() => showIdleWarning(minutes), Math.max(totalMs - IDLE_WARNING_MS, 0));
+  idleTimer = setTimeout(async () => {
+    clearIdleTimers();
+    await signOut(auth);
+    window.location.href = "index.html";
+  }, totalMs);
+}
+
+function initIdleLogout(minutes) {
+  const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+  const handler = () => resetIdleTimer(minutes);
+  events.forEach(evt => document.addEventListener(evt, handler, { passive: true }));
+  resetIdleTimer(minutes);
 }
 
 export function roleHome(role) {
