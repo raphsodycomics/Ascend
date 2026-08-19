@@ -29,6 +29,13 @@ if (form) {
 
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
+
+      // TEMPORARY DEBUG LINE — remove once login works.
+      // This prints the exact UID Firebase Auth assigned to this sign-in,
+      // so it can be compared character-for-character against the
+      // document ID in Firestore's users collection.
+      console.log("Signed in with UID:", credential.user.uid);
+
       const snap = await getDoc(doc(db, "users", credential.user.uid));
 
       if (!snap.exists()) {
