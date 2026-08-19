@@ -57,11 +57,12 @@ p { margin: 0 0 8px 0; color: var(--muted); }
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  overflow: hidden;
+  background: var(--red);
   flex-shrink: 0;
 }
-.ascend-mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ascend-mark svg { width: 26px; height: 26px; }
 .ascend-mark.lg { width: 64px; height: 64px; }
+.ascend-mark.lg svg { width: 38px; height: 38px; }
 
 .wordmark-block { text-align: center; }
 .wordmark-heirs {
@@ -208,6 +209,7 @@ textarea { resize: vertical; min-height: 70px; }
 }
 .sidebar-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 30px; }
 .sidebar-brand .ascend-mark { width: 34px; height: 34px; }
+.sidebar-brand .ascend-mark svg { width: 20px; height: 20px; }
 .sidebar-brand-text { line-height: 1.2; }
 .sidebar-brand-text b { font-family: var(--font-display); font-size: 15px; }
 .sidebar-brand-text span { display: block; font-size: 11px; color: #A8A8A8; letter-spacing: 0.06em; }
@@ -372,3 +374,49 @@ tr.clickable:hover { background: var(--red-tint); }
   .main { padding: 20px; }
   .field-row { flex-direction: column; gap: 0; }
 }
+
+/* ---------- Prospect detail: outcome banner ---------- */
+.outcome-banner {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.outcome-banner.sold { background: var(--green-tint); color: var(--green); }
+.outcome-banner.lost { background: #EFEFEF; color: var(--muted); }
+
+/* ---------- Sold/Lost action buttons ---------- */
+.outcome-actions { display: flex; gap: 8px; margin: 16px 0 4px 0; }
+.outcome-actions .btn { width: auto; flex: 1; }
+.btn-sold { background: var(--green-tint); color: var(--green); }
+.btn-sold:hover { background: #d7f0e2; }
+.btn-lost { background: #EFEFEF; color: var(--muted); }
+.btn-lost:hover { background: #e2e2e2; }
+
+/* ---------- Log timeline ---------- */
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 18px 0 8px 0;
+}
+.log-list { display: flex; flex-direction: column; gap: 10px; margin: 0 0 14px 0; max-height: 220px; overflow-y: auto; }
+.log-entry { background: var(--white); border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 10px 12px; }
+.log-entry-date { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.log-entry-text { font-size: 14px; color: var(--ink); white-space: pre-wrap; }
+.log-empty { color: var(--muted); font-size: 13px; padding: 4px 0 12px 0; }
+
+/* ---------- Stacked modal (Mark Sold / Mark Lost mini-forms) ---------- */
+.mini-overlay {
+  position: fixed; inset: 0;
+  background: rgba(26,26,26,0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 20px;
+}
+.mini-overlay.open { display: flex; }
