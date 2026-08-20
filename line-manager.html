@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Line Manager — ASCEND</title>
+<title>Area Manager — ASCEND</title>
 <link rel="stylesheet" href="css/styles.css">
 <link rel="icon" type="image/png" href="logo.png">
 <style>
-  /* Scoped additions for the FA read-only drill-down. Kept inline so
-     this file doesn't depend on edits to the shared stylesheet. */
+  /* Scoped additions for the FA read-only drill-down and manage modals.
+     Kept inline so this file doesn't depend on edits to the shared stylesheet. */
   .modal-tabs { display:flex; gap:8px; margin:14px 0 16px; border-bottom:1px solid var(--border, #e5e5e5); }
   .modal-tab { background:none; border:none; padding:8px 4px; margin-right:14px; font-size:14px; color:var(--muted,#888);
                cursor:pointer; border-bottom:2px solid transparent; }
@@ -19,8 +19,9 @@
   .log-entry:last-child { border-bottom:none; }
   .log-entry-date { font-size:12px; color:var(--muted,#888); margin-bottom:3px; }
   .log-entry-text { font-size:14px; line-height:1.45; }
+  .manage-actions { display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+  #transferSection select { width:100%; margin-top:6px; }
 </style>
-<link rel="icon" type="image/png" href="logo.png">
 </head>
 <body>
 
@@ -30,7 +31,7 @@
       <span class="ascend-mark"><img src="logo.png" alt="ASCEND logo"></span>
       <div class="sidebar-brand-text"><b>ASCEND</b><span>HEIRS LIFE</span></div>
     </div>
-    <div class="sidebar-role">Line Manager</div>
+    <div class="sidebar-role">Area Manager</div>
     <div class="sidebar-name" id="userName">—</div>
     <nav class="sidebar-nav">
       <a href="#" class="active">Overview</a>
@@ -119,10 +120,48 @@
   </div>
 </div>
 
+<!-- Manage Unit Manager account: Reactivate / Suspend / Archive -->
+<div class="modal-overlay" id="manageUnitModal">
+  <div class="modal-box" style="max-width:420px;">
+    <h3 id="manageUnitModalTitle">Manage Unit Manager</h3>
+    <p style="color:var(--muted);font-size:13px;margin:6px 0 14px;">Current status: <span id="manageUnitCurrentStatus"></span></p>
+    <div id="manageUnitMsg" class="form-msg"></div>
+    <div class="manage-actions">
+      <button type="button" class="btn btn-primary" id="manageUnitReactivateBtn">Reactivate</button>
+      <button type="button" class="btn btn-secondary" id="manageUnitSuspendBtn">Suspend</button>
+      <button type="button" class="btn btn-ghost" id="manageUnitArchiveBtn" style="color:var(--red);">Archive</button>
+    </div>
+    <p style="color:var(--muted);font-size:12px;margin-top:12px;">This only affects the Unit Manager's own access — Financial Advisors under this Unit keep their access either way.</p>
+    <button type="button" class="btn btn-ghost" id="closeManageUnitModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Manage FA account: Reactivate / Deactivate / Archive / Transfer -->
+<div class="modal-overlay" id="manageFaModal">
+  <div class="modal-box" style="max-width:460px;">
+    <h3 id="manageFaModalTitle">Manage FA</h3>
+    <p style="color:var(--muted);font-size:13px;margin:6px 0 14px;">Current status: <span id="manageFaCurrentStatus"></span> · Unit: <span id="manageFaCurrentUnit"></span></p>
+    <div id="manageFaMsg" class="form-msg"></div>
+    <div class="manage-actions">
+      <button type="button" class="btn btn-primary" id="manageFaReactivateBtn">Reactivate</button>
+      <button type="button" class="btn btn-secondary" id="manageFaDeactivateBtn">Deactivate</button>
+      <button type="button" class="btn btn-ghost" id="manageFaArchiveBtn" style="color:var(--red);">Archive</button>
+      <button type="button" class="btn btn-ghost" id="manageFaTransferToggleBtn">Transfer to another Unit…</button>
+    </div>
+    <div id="transferSection" style="display:none;">
+      <label for="transferUnitSelect">Destination Unit</label>
+      <select id="transferUnitSelect"></select>
+      <button type="button" class="btn btn-primary btn-sm" id="confirmTransferBtn" style="margin-top:10px;">Confirm transfer</button>
+    </div>
+    <button type="button" class="btn btn-ghost" id="closeManageFaModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
 <script type="module">
   import { db } from "./js/firebase-config.js";
   import {
-    collection, addDoc, doc, setDoc, getDoc, getDocs, query, where, serverTimestamp, Timestamp, orderBy, limit
+    collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, writeBatch,
+    query, where, serverTimestamp, Timestamp, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday, roleLabel } from "./js/auth.js";
 
@@ -130,6 +169,7 @@
   let currentFa = { id: null, name: null };
   let currentFaProspects = [];
   let faModalTab = "active";
+  let allUnits = []; // [{id, name}] cache, populated in loadOverview — used for the transfer destination list
 
   guardPage(["line_manager"], async (profile) => {
     me = profile;
@@ -154,10 +194,21 @@
     return Array.isArray(p.logs) ? p.logs : [];
   }
 
+  // Account status badge, shared by Unit Manager and FA manage modals.
+  function statusBadgeAccount(status) {
+    const s = status || "active";
+    const map = { active: "green", deactivated: "amber", suspended: "amber", archived: "grey" };
+    const label = { active: "Active", deactivated: "Deactivated", suspended: "Suspended", archived: "Archived" };
+    return `<span class="badge ${map[s] || "grey"}"><span class="badge-dot"></span>${label[s] || s}</span>`;
+  }
+
   async function loadOverview() {
     const unitsSnap = await getDocs(query(collection(db, "units"), where("lineId", "==", me.lineId), orderBy("createdAt", "desc")));
     const faSnap = await getDocs(query(collection(db, "users"), where("lineId", "==", me.lineId), where("role", "==", "fa")));
     const pendingSnap = await getDocs(query(collection(db, "invitations"), where("lineId", "==", me.lineId), where("role", "==", "unit_manager"), where("used", "==", false)));
+
+    allUnits = [];
+    unitsSnap.forEach(d => allUnits.push({ id: d.id, name: d.data().name }));
 
     document.getElementById("statUnits").textContent = unitsSnap.size;
     document.getElementById("statFAs").textContent = faSnap.size;
@@ -182,6 +233,8 @@
     renderPending(pendingSnap);
   }
 
+  // ---------------- Units table ----------------
+
   function renderUnits(unitsSnap, faSnap) {
     const wrap = document.getElementById("unitsTableWrap");
     if (unitsSnap.empty) { wrap.innerHTML = '<div class="empty-state">No Units created yet. Invite your first Unit Manager above.</div>'; return; }
@@ -192,22 +245,93 @@
     let rows = "";
     unitsSnap.forEach(d => {
       const u = d.data();
-      const status = u.unitManagerId
+      const isActive = !!u.unitManagerId;
+      const status = isActive
         ? '<span class="badge green"><span class="badge-dot"></span>Active</span>'
         : '<span class="badge amber"><span class="badge-dot"></span>Invited</span>';
+      // Only once a Unit Manager has actually accepted is there an account
+      // to manage — before that there's nothing to suspend/archive yet.
+      const manageBtn = isActive
+        ? `<button type="button" class="btn btn-ghost btn-sm manage-unit" data-um="${u.unitManagerId}" data-unitname="${escapeHtml(u.name)}">Manage</button>`
+        : "";
       rows += `<tr class="clickable" data-unit="${d.id}" data-name="${escapeHtml(u.name)}">
         <td><b>${escapeHtml(u.name)}</b></td>
         <td>${status}</td>
         <td>${faByUnit[d.id] || 0}</td>
         <td>${fmtDate(u.createdAt)}</td>
+        <td>${manageBtn}</td>
       </tr>`;
     });
-    wrap.innerHTML = `<table><thead><tr><th>Unit</th><th>Unit Manager status</th><th>FAs</th><th>Created</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrap.innerHTML = `<table><thead><tr><th>Unit</th><th>Unit Manager status</th><th>FAs</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 
     wrap.querySelectorAll("tr.clickable").forEach(tr => {
-      tr.addEventListener("click", () => openUnitModal(tr.dataset.unit, tr.dataset.name));
+      tr.addEventListener("click", (e) => {
+        if (e.target.closest(".manage-unit")) return; // handled separately below
+        openUnitModal(tr.dataset.unit, tr.dataset.name);
+      });
+    });
+    wrap.querySelectorAll(".manage-unit").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openManageUnitModal(btn.dataset.um, btn.dataset.unitname);
+      });
     });
   }
+
+  // ---------------- Manage Unit Manager account ----------------
+
+  let manageUnitManagerId = null;
+
+  async function openManageUnitModal(umId, unitName) {
+    manageUnitManagerId = umId;
+    document.getElementById("manageUnitModalTitle").textContent = "Manage — " + unitName + " Unit Manager";
+    document.getElementById("manageUnitCurrentStatus").innerHTML = '<span class="badge grey"><span class="badge-dot"></span>Loading…</span>';
+    document.getElementById("manageUnitMsg").className = "form-msg";
+    document.getElementById("manageUnitModal").classList.add("open");
+    try {
+      const snap = await getDoc(doc(db, "users", umId));
+      const status = snap.exists() ? snap.data().status : "active";
+      document.getElementById("manageUnitCurrentStatus").innerHTML = statusBadgeAccount(status);
+    } catch (err) {
+      console.error(err);
+      document.getElementById("manageUnitCurrentStatus").textContent = "Unknown";
+    }
+  }
+
+  document.getElementById("closeManageUnitModal").addEventListener("click", () => {
+    document.getElementById("manageUnitModal").classList.remove("open");
+  });
+
+  async function setUnitManagerStatus(newStatus, btn) {
+    const msg = document.getElementById("manageUnitMsg");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      // Only ever touches the Unit Manager's own user doc — never the
+      // Unit doc itself and never any FA doc, so FAs under this Unit
+      // keep their access no matter what status is set here.
+      await updateDoc(doc(db, "users", manageUnitManagerId), {
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+      document.getElementById("manageUnitModal").classList.remove("open");
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't update this account (" + (err.code || err.message) + ").";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = original;
+  }
+
+  document.getElementById("manageUnitReactivateBtn").addEventListener("click", (e) => setUnitManagerStatus("active", e.target));
+  document.getElementById("manageUnitSuspendBtn").addEventListener("click", (e) => setUnitManagerStatus("suspended", e.target));
+  document.getElementById("manageUnitArchiveBtn").addEventListener("click", (e) => {
+    if (!confirm("Archive this Unit Manager's account? They will immediately lose access until reactivated.")) return;
+    setUnitManagerStatus("archived", e.target);
+  });
+
+  // ---------------- Unit drill-down (FAs in that Unit) ----------------
 
   async function openUnitModal(unitId, unitName) {
     document.getElementById("unitModalTitle").textContent = unitName;
@@ -232,15 +356,116 @@
       const badge = count > 0
         ? `<span class="badge green"><span class="badge-dot"></span>${count} today</span>`
         : '<span class="badge red"><span class="badge-dot"></span>Not submitted</span>';
-      rows += `<tr class="clickable" data-fa="${d.id}" data-name="${escapeHtml(fa.name)}"><td>${escapeHtml(fa.name)}</td><td>${badge}</td></tr>`;
+      rows += `<tr class="clickable" data-fa="${d.id}" data-name="${escapeHtml(fa.name)}">
+        <td>${escapeHtml(fa.name)}</td>
+        <td>${badge}</td>
+        <td><button type="button" class="btn btn-ghost btn-sm manage-fa" data-fa="${d.id}" data-name="${escapeHtml(fa.name)}" data-status="${fa.status || "active"}" data-unit="${fa.unitId || unitId}">Manage</button></td>
+      </tr>`;
     });
-    body.innerHTML = `<table><thead><tr><th>FA</th><th>Today</th></tr></thead><tbody>${rows}</tbody></table>`;
+    body.innerHTML = `<table><thead><tr><th>FA</th><th>Today</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+
     body.querySelectorAll("tr.clickable").forEach(tr => {
-      tr.addEventListener("click", () => openFaModal(tr.dataset.fa, tr.dataset.name));
+      tr.addEventListener("click", (e) => {
+        if (e.target.closest(".manage-fa")) return; // handled separately below
+        openFaModal(tr.dataset.fa, tr.dataset.name);
+      });
+    });
+    body.querySelectorAll(".manage-fa").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openManageFaModal(btn.dataset.fa, btn.dataset.name, btn.dataset.status, btn.dataset.unit);
+      });
     });
   }
 
   document.getElementById("closeUnitModal").addEventListener("click", () => document.getElementById("unitModal").classList.remove("open"));
+
+  // ---------------- Manage FA account (Reactivate / Deactivate / Archive / Transfer) ----------------
+
+  let manageFaId = null;
+
+  function openManageFaModal(faId, faName, faStatus, faUnitId) {
+    manageFaId = faId;
+    document.getElementById("manageFaModalTitle").textContent = "Manage — " + faName;
+    document.getElementById("manageFaCurrentStatus").innerHTML = statusBadgeAccount(faStatus);
+    const unitObj = allUnits.find(u => u.id === faUnitId);
+    document.getElementById("manageFaCurrentUnit").textContent = unitObj ? unitObj.name : "—";
+    document.getElementById("manageFaMsg").className = "form-msg";
+
+    document.getElementById("transferSection").style.display = "none";
+    const select = document.getElementById("transferUnitSelect");
+    select.innerHTML = allUnits
+      .filter(u => u.id !== faUnitId)
+      .map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`)
+      .join("");
+
+    document.getElementById("manageFaModal").classList.add("open");
+  }
+
+  document.getElementById("closeManageFaModal").addEventListener("click", () => {
+    document.getElementById("manageFaModal").classList.remove("open");
+  });
+
+  async function setFaStatus(newStatus, btn) {
+    const msg = document.getElementById("manageFaMsg");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await updateDoc(doc(db, "users", manageFaId), {
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+      document.getElementById("manageFaModal").classList.remove("open");
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't update this account (" + (err.code || err.message) + ").";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = original;
+  }
+
+  document.getElementById("manageFaReactivateBtn").addEventListener("click", (e) => setFaStatus("active", e.target));
+  document.getElementById("manageFaDeactivateBtn").addEventListener("click", (e) => setFaStatus("deactivated", e.target));
+  document.getElementById("manageFaArchiveBtn").addEventListener("click", (e) => {
+    if (!confirm("Archive this FA account? They will immediately lose access until reactivated.")) return;
+    setFaStatus("archived", e.target);
+  });
+
+  document.getElementById("manageFaTransferToggleBtn").addEventListener("click", () => {
+    const sec = document.getElementById("transferSection");
+    sec.style.display = sec.style.display === "none" ? "block" : "none";
+  });
+
+  document.getElementById("confirmTransferBtn").addEventListener("click", async () => {
+    const destUnitId = document.getElementById("transferUnitSelect").value;
+    if (!destUnitId) return;
+    if (!confirm("Transfer this FA — and every prospect and log entry they own — to the selected Unit?")) return;
+
+    const msg = document.getElementById("manageFaMsg");
+    const btn = document.getElementById("confirmTransferBtn");
+    btn.disabled = true; btn.textContent = "Transferring…";
+    try {
+      // Logs live inside each prospect doc's `logs` array field, so moving
+      // the prospect's unitId carries its whole log history along with it —
+      // nothing separate to migrate.
+      const prospectsSnap = await getDocs(query(collection(db, "prospects"), where("faId", "==", manageFaId)));
+      const batch = writeBatch(db);
+      prospectsSnap.forEach(d => {
+        batch.update(doc(db, "prospects", d.id), { unitId: destUnitId, updatedAt: serverTimestamp() });
+      });
+      batch.update(doc(db, "users", manageFaId), { unitId: destUnitId, updatedAt: serverTimestamp() });
+      await batch.commit();
+
+      document.getElementById("manageFaModal").classList.remove("open");
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't complete the transfer (" + (err.code || err.message) + ").";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = "Confirm transfer";
+  });
 
   // ---------------- FA drill-down modal (Prospects / Sold / Lost) ----------------
   // Same data model as fa.html: outcome ("active"/"sold"/"lost"), policySold,
