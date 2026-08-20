@@ -256,7 +256,7 @@
       // to manage — before that there's nothing to suspend/archive yet.
       const manageBtn = isActive
         ? `<button type="button" class="btn btn-ghost btn-sm manage-unit" data-um="${u.unitManagerId}" data-unitname="${escapeHtml(u.name)}">Manage</button>`
-        : "";
+        : `<button type="button" class="btn btn-ghost btn-sm delete-unit" data-unit="${d.id}" data-unitname="${escapeHtml(u.name)}" style="color:var(--red);">Delete</button>`;
       rows += `<tr class="clickable" data-unit="${d.id}" data-name="${escapeHtml(u.name)}">
         <td><b>${escapeHtml(u.name)}</b></td>
         <td>${status}</td>
@@ -279,6 +279,30 @@
         openManageUnitModal(btn.dataset.um, btn.dataset.unitname);
       });
     });
+    wrap.querySelectorAll(".delete-unit").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteUnit(btn.dataset.unit, btn.dataset.unitname, btn);
+      });
+    });
+  }
+
+  async function deleteUnit(unitId, unitName, btn) {
+    if (!confirm(`Delete "${unitName}"? This also cancels its pending Unit Manager invitation. This cannot be undone.`)) return;
+    btn.disabled = true; btn.textContent = "Deleting…";
+    try {
+      // The invite generated when this Unit was created is now orphaned —
+      // remove it too so the link stops working immediately.
+      const invSnap = await getDocs(query(collection(db, "invitations"), where("unitId", "==", unitId), where("used", "==", false)));
+      await Promise.all(invSnap.docs.map(d => deleteDoc(doc(db, "invitations", d.id))));
+
+      await deleteDoc(doc(db, "units", unitId));
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      alert("Couldn't delete this Unit (" + (err.code || err.message) + "). If this keeps happening, the Firestore rules may need updating to allow it.");
+      btn.disabled = false; btn.textContent = "Delete";
+    }
   }
 
   // ---------------- Manage Unit Manager account ----------------
