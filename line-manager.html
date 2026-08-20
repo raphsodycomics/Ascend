@@ -55,6 +55,13 @@
     </div>
 
     <div class="card">
+      <div class="card-header"><h3>Line-wide outcomes</h3></div>
+      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Every sale or loss across your whole Line, without opening each FA individually.</p>
+      <button type="button" class="btn btn-secondary" id="viewSoldBtn">View Sold</button>
+      <button type="button" class="btn btn-ghost" id="viewLostBtn" style="margin-left:10px;">View Lost</button>
+    </div>
+
+    <div class="card">
       <div class="card-header"><h3>Invite a Unit Manager</h3></div>
       <p style="margin-bottom:16px;">This creates a new Unit under your Line and invites its first Unit Manager.</p>
       <div id="inviteMsg" class="form-msg"></div>
@@ -120,6 +127,15 @@
   </div>
 </div>
 
+<!-- Line-wide Sold / Lost rollup: FA, Client, Policy/Reason, Date -->
+<div class="modal-overlay" id="lineOutcomeModal">
+  <div class="modal-box" style="max-width:680px;">
+    <h3 id="lineOutcomeModalTitle">Sold</h3>
+    <div id="lineOutcomeModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeLineOutcomeModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
 <!-- Manage Unit Manager account: Reactivate / Suspend / Archive -->
 <div class="modal-overlay" id="manageUnitModal">
   <div class="modal-box" style="max-width:420px;">
@@ -170,6 +186,8 @@
   let currentFaProspects = [];
   let faModalTab = "active";
   let allUnits = []; // [{id, name}] cache, populated in loadOverview — used for the transfer destination list
+  let faNameById = {}; // {faId: name} cache, populated in loadOverview — used for the Sold/Lost rollup
+  let allLineProspects = []; // full prospect list for the whole line, populated in loadOverview
 
   guardPage(["line_manager"], async (profile) => {
     me = profile;
@@ -210,6 +228,9 @@
     allUnits = [];
     unitsSnap.forEach(d => allUnits.push({ id: d.id, name: d.data().name }));
 
+    faNameById = {};
+    faSnap.forEach(d => { faNameById[d.id] = d.data().name; });
+
     let activeUnitsCount = 0;
     unitsSnap.forEach(d => { if (d.data().unitManagerId) activeUnitsCount++; });
 
@@ -220,10 +241,12 @@
     let todayCount = 0, soldCount = 0;
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    allLineProspects = [];
     if (faSnap.size > 0) {
       const prospectsSnap = await getDocs(query(collection(db, "prospects"), where("lineId", "==", me.lineId)));
       prospectsSnap.forEach(p => {
         const d = p.data();
+        allLineProspects.push({ id: p.id, ...d });
         if (isToday(d.createdAt)) todayCount++;
         const closedTs = d.closedAt || d.updatedAt;
         if (getOutcome(d) === "sold" && closedTs && closedTs.toDate() >= monthStart) soldCount++;
@@ -235,6 +258,48 @@
     renderUnits(unitsSnap, faSnap);
     renderPending(pendingSnap);
   }
+
+  // ---------------- Line-wide Sold / Lost rollup ----------------
+  // Pure client-side filter over allLineProspects, already fetched for the
+  // "Sold this month" stat — no extra Firestore reads.
+
+  function openLineOutcomeModal(kind) {
+    document.getElementById("lineOutcomeModalTitle").textContent = kind === "sold" ? "Sold — across the Line" : "Lost — across the Line";
+    document.getElementById("lineOutcomeModal").classList.add("open");
+    const body = document.getElementById("lineOutcomeModalBody");
+
+    const rows = allLineProspects
+      .filter(p => getOutcome(p) === kind)
+      .sort((a, b) => {
+        const da = (a.closedAt || a.updatedAt)?.seconds || 0;
+        const dbb = (b.closedAt || b.updatedAt)?.seconds || 0;
+        return dbb - da;
+      });
+
+    if (rows.length === 0) {
+      body.innerHTML = `<div class="empty-state">No ${kind === "sold" ? "sales" : "losses"} recorded yet.</div>`;
+      return;
+    }
+
+    const thirdHeader = kind === "sold" ? "Policy" : "Reason";
+    let html = `<table><thead><tr><th>FA</th><th>Client</th><th>${thirdHeader}</th><th>Date</th></tr></thead><tbody>`;
+    rows.forEach(p => {
+      const faName = faNameById[p.faId] || "—";
+      const thirdCell = kind === "sold" ? escapeHtml(p.policySold || "—") : escapeHtml(p.lostReason || "—");
+      html += `<tr>
+        <td>${escapeHtml(faName)}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${thirdCell}</td>
+        <td>${fmtDate(p.closedAt || p.updatedAt)}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    body.innerHTML = html;
+  }
+
+  document.getElementById("viewSoldBtn").addEventListener("click", () => openLineOutcomeModal("sold"));
+  document.getElementById("viewLostBtn").addEventListener("click", () => openLineOutcomeModal("lost"));
+  document.getElementById("closeLineOutcomeModal").addEventListener("click", () => document.getElementById("lineOutcomeModal").classList.remove("open"));
 
   // ---------------- Units table ----------------
 
