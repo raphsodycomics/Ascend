@@ -18,6 +18,7 @@
   .log-entry:last-child { border-bottom:none; }
   .log-entry-date { font-size:12px; color:var(--muted,#888); margin-bottom:3px; }
   .log-entry-text { font-size:14px; line-height:1.45; }
+  .manage-actions { display:flex; flex-direction:column; gap:10px; margin-top:6px; }
 </style>
 <link rel="icon" type="image/png" href="logo.png">
 </head>
@@ -107,10 +108,25 @@
   </div>
 </div>
 
+<!-- Manage FA account: Reactivate / Deactivate / Archive -->
+<div class="modal-overlay" id="manageModal">
+  <div class="modal-box" style="max-width:420px;">
+    <h3 id="manageModalTitle">Manage FA</h3>
+    <p style="color:var(--muted);font-size:13px;margin:6px 0 14px;">Current status: <span id="manageCurrentStatus"></span></p>
+    <div id="manageMsg" class="form-msg"></div>
+    <div class="manage-actions">
+      <button type="button" class="btn btn-primary" id="manageReactivateBtn">Reactivate</button>
+      <button type="button" class="btn btn-secondary" id="manageDeactivateBtn">Deactivate</button>
+      <button type="button" class="btn btn-ghost" id="manageArchiveBtn" style="color:var(--red);">Archive</button>
+    </div>
+    <button type="button" class="btn btn-ghost" id="closeManageModal" style="margin-top:14px;">Cancel</button>
+  </div>
+</div>
+
 <script type="module">
   import { db } from "./js/firebase-config.js";
   import {
-    collection, addDoc, doc, setDoc, getDoc, getDocs, query, where, serverTimestamp, Timestamp, orderBy, limit
+    collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, serverTimestamp, Timestamp, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
 
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday } from "./js/auth.js";
@@ -162,6 +178,15 @@
     renderPending(pendingSnap);
   }
 
+  // ---------------- Account status badge (Active / Deactivated / Archived) ----------------
+
+  function statusBadgeAccount(status) {
+    const s = status || "active";
+    const map = { active: "green", deactivated: "amber", archived: "grey" };
+    const label = { active: "Active", deactivated: "Deactivated", archived: "Archived" };
+    return `<span class="badge ${map[s] || "grey"}"><span class="badge-dot"></span>${label[s] || s}</span>`;
+  }
+
   function renderFAs(faSnap, todayByFa) {
     const wrap = document.getElementById("faTableWrap");
     if (faSnap.empty) { wrap.innerHTML = '<div class="empty-state">No Financial Advisors invited yet.</div>'; return; }
@@ -170,20 +195,74 @@
     faSnap.forEach(d => {
       const fa = d.data();
       const count = todayByFa[d.id] || 0;
-      const badge = count > 0
+      const submittedBadge = count > 0
         ? `<span class="badge green"><span class="badge-dot"></span>${count} today</span>`
         : '<span class="badge red"><span class="badge-dot"></span>Not submitted</span>';
       rows += `<tr class="clickable" data-fa="${d.id}" data-name="${escapeHtml(fa.name)}">
         <td>${escapeHtml(fa.name)}</td>
         <td>${escapeHtml(fa.email)}</td>
-        <td>${badge}</td>
+        <td>${statusBadgeAccount(fa.status)}</td>
+        <td>${submittedBadge}</td>
+        <td><button type="button" class="btn btn-ghost btn-sm manage-fa" data-fa="${d.id}" data-name="${escapeHtml(fa.name)}" data-status="${fa.status || "active"}">Manage</button></td>
       </tr>`;
     });
-    wrap.innerHTML = `<table><thead><tr><th>Name</th><th>Email</th><th>Today</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrap.innerHTML = `<table><thead><tr><th>Name</th><th>Email</th><th>Account</th><th>Today</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+
     wrap.querySelectorAll("tr.clickable").forEach(tr => {
-      tr.addEventListener("click", () => openFaModal(tr.dataset.fa, tr.dataset.name));
+      tr.addEventListener("click", (e) => {
+        if (e.target.closest(".manage-fa")) return; // handled by its own listener below
+        openFaModal(tr.dataset.fa, tr.dataset.name);
+      });
+    });
+    wrap.querySelectorAll(".manage-fa").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openManageModal(btn.dataset.fa, btn.dataset.name, btn.dataset.status);
+      });
     });
   }
+
+  // ---------------- Manage FA account modal ----------------
+
+  let manageFaId = null;
+
+  function openManageModal(faId, faName, faStatus) {
+    manageFaId = faId;
+    document.getElementById("manageModalTitle").textContent = "Manage — " + faName;
+    document.getElementById("manageCurrentStatus").innerHTML = statusBadgeAccount(faStatus);
+    document.getElementById("manageMsg").className = "form-msg";
+    document.getElementById("manageModal").classList.add("open");
+  }
+
+  document.getElementById("closeManageModal").addEventListener("click", () => {
+    document.getElementById("manageModal").classList.remove("open");
+  });
+
+  async function setFaStatus(newStatus, btn) {
+    const msg = document.getElementById("manageMsg");
+    const originalText = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await updateDoc(doc(db, "users", manageFaId), {
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+      document.getElementById("manageModal").classList.remove("open");
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't update this account (" + (err.code || err.message) + ").";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = originalText;
+  }
+
+  document.getElementById("manageReactivateBtn").addEventListener("click", (e) => setFaStatus("active", e.target));
+  document.getElementById("manageDeactivateBtn").addEventListener("click", (e) => setFaStatus("deactivated", e.target));
+  document.getElementById("manageArchiveBtn").addEventListener("click", (e) => {
+    if (!confirm("Archive this FA account? They will immediately lose access until reactivated.")) return;
+    setFaStatus("archived", e.target);
+  });
 
   // ---------------- FA drill-down modal (Prospects / Sold / Lost) ----------------
   // Mirrors the FA page's own data model exactly:
@@ -343,16 +422,35 @@
       html += `<tr>
         <td><b>${escapeHtml(inv.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(inv.email)}</span></td>
         <td>${fmtDate(inv.createdAt)}</td>
-        <td><button class="btn btn-ghost btn-sm copy-pending" data-token="${inv.id}">Copy link</button></td>
+        <td>
+          <button class="btn btn-ghost btn-sm copy-pending" data-token="${inv.id}">Copy link</button>
+          <button class="btn btn-ghost btn-sm delete-pending" data-token="${inv.id}" style="color:var(--red);margin-left:6px;">Delete</button>
+        </td>
       </tr>`;
     });
     wrap.innerHTML = `<table><thead><tr><th>Invitee</th><th>Sent</th><th></th></tr></thead><tbody>${html}</tbody></table>`;
+
     wrap.querySelectorAll(".copy-pending").forEach(btn => {
       btn.addEventListener("click", () => {
         const link = inviteUrl(btn.dataset.token);
         copyText(link);
         btn.textContent = "Copied!";
         setTimeout(() => btn.textContent = "Copy link", 1500);
+      });
+    });
+
+    wrap.querySelectorAll(".delete-pending").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this invitation? The link will stop working immediately.")) return;
+        btn.disabled = true; btn.textContent = "Deleting…";
+        try {
+          await deleteDoc(doc(db, "invitations", btn.dataset.token));
+          loadOverview();
+        } catch (err) {
+          console.error(err);
+          alert("Couldn't delete this invitation (" + (err.code || err.message) + ").");
+          btn.disabled = false; btn.textContent = "Delete";
+        }
       });
     });
   }
