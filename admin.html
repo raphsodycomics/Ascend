@@ -119,16 +119,46 @@
     let rows = "";
     snap.forEach(d => {
       const l = d.data();
-      const status = l.lineManagerId
+      const isActive = !!l.lineManagerId;
+      const status = isActive
         ? '<span class="badge green"><span class="badge-dot"></span>Active</span>'
         : '<span class="badge amber"><span class="badge-dot"></span>Invited</span>';
+      // Only a Line still waiting on its first Line Manager to accept can
+      // be deleted — once active, deleting it would orphan a real manager
+      // and their whole Unit/FA tree, so no delete button is shown at all.
+      const deleteBtn = isActive
+        ? ""
+        : `<button class="btn btn-ghost btn-sm delete-line" data-line="${d.id}" data-name="${escapeHtml(l.name)}" style="color:var(--red);">Delete</button>`;
       rows += `<tr>
         <td><b>${escapeHtml(l.name)}</b></td>
         <td>${status}</td>
         <td>${fmtDate(l.createdAt)}</td>
+        <td>${deleteBtn}</td>
       </tr>`;
     });
-    wrap.innerHTML = `<table><thead><tr><th>Line</th><th>Line Manager status</th><th>Created</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrap.innerHTML = `<table><thead><tr><th>Line</th><th>Line Manager status</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+
+    wrap.querySelectorAll(".delete-line").forEach(btn => {
+      btn.addEventListener("click", () => deleteLine(btn.dataset.line, btn.dataset.name, btn));
+    });
+  }
+
+  async function deleteLine(lineId, lineName, btn) {
+    if (!confirm(`Delete "${lineName}"? This also cancels its pending Line Manager invitation. This cannot be undone.`)) return;
+    btn.disabled = true; btn.textContent = "Deleting…";
+    try {
+      // The invite generated when this Line was created is now orphaned —
+      // remove it too so the link stops working immediately.
+      const invSnap = await getDocs(query(collection(db, "invitations"), where("lineId", "==", lineId), where("used", "==", false)));
+      await Promise.all(invSnap.docs.map(d => deleteDoc(doc(db, "invitations", d.id))));
+
+      await deleteDoc(doc(db, "lines", lineId));
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      alert("Couldn't delete this Line (" + (err.code || err.message) + "). If this keeps happening, the Firestore rules may need updating to allow it.");
+      btn.disabled = false; btn.textContent = "Delete";
+    }
   }
 
   function renderPending(snap) {
