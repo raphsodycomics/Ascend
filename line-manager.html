@@ -160,7 +160,7 @@
 <script type="module">
   import { db } from "./js/firebase-config.js";
   import {
-    collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, writeBatch,
+    collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch,
     query, where, serverTimestamp, Timestamp, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday, roleLabel } from "./js/auth.js";
@@ -210,7 +210,10 @@
     allUnits = [];
     unitsSnap.forEach(d => allUnits.push({ id: d.id, name: d.data().name }));
 
-    document.getElementById("statUnits").textContent = unitsSnap.size;
+    let activeUnitsCount = 0;
+    unitsSnap.forEach(d => { if (d.data().unitManagerId) activeUnitsCount++; });
+
+    document.getElementById("statUnits").textContent = activeUnitsCount;
     document.getElementById("statFAs").textContent = faSnap.size;
 
     // Today's contacts + month sold across the whole line.
@@ -610,7 +613,10 @@
       html += `<tr>
         <td><b>${escapeHtml(inv.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(inv.email)}</span></td>
         <td>${fmtDate(inv.createdAt)}</td>
-        <td><button class="btn btn-ghost btn-sm copy-pending" data-token="${inv.id}">Copy link</button></td>
+        <td>
+          <button class="btn btn-ghost btn-sm copy-pending" data-token="${inv.id}">Copy link</button>
+          <button class="btn btn-ghost btn-sm delete-pending" data-token="${inv.id}" style="color:var(--red);margin-left:6px;">Delete</button>
+        </td>
       </tr>`;
     });
     wrap.innerHTML = `<table><thead><tr><th>Invitee</th><th>Sent</th><th></th></tr></thead><tbody>${html}</tbody></table>`;
@@ -620,6 +626,20 @@
         copyText(link);
         btn.textContent = "Copied!";
         setTimeout(() => btn.textContent = "Copy link", 1500);
+      });
+    });
+    wrap.querySelectorAll(".delete-pending").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this invitation? The link will stop working immediately.")) return;
+        btn.disabled = true; btn.textContent = "Deleting…";
+        try {
+          await deleteDoc(doc(db, "invitations", btn.dataset.token));
+          loadOverview();
+        } catch (err) {
+          console.error(err);
+          alert("Couldn't delete this invitation (" + (err.code || err.message) + ").");
+          btn.disabled = false; btn.textContent = "Delete";
+        }
       });
     });
   }
