@@ -2,7 +2,189 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, in<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Activate your invitation — ASCEND</title>
+<link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" type="image/png" href="logo.png">
+</head>
+<body>
+
+<div class="auth-screen">
+  <div class="wordmark-block">
+    <span class="ascend-mark lg">
+      <img src="logo.png" alt="Heirs Life Ascend Logo">
+    </span>
+    <div class="wordmark-heirs">HEIRS LIFE</div>
+    <div class="wordmark-ascend">ASCEND</div>
+    <div class="wordmark-tag">Activate your invitation</div>
+  </div>
+
+  <div class="auth-card" id="cardArea">
+    <div id="stateLoading" class="loading-line">Checking your invitation…</div>
+    <div id="stateInvalid" style="display:none;">
+      <div class="form-msg error" style="display:block;" id="invalidMsg">
+        This invitation link is invalid, expired, or has already been used.
+        Ask your manager to send you a new invitation.
+      </div>
+      <a href="index.html" class="btn btn-ghost" style="display:block;text-align:center;text-decoration:none;">Back to log in</a>
+    </div>
+
+    <form id="activateForm" style="display:none;">
+      <p style="color:var(--ink);margin-bottom:18px;">
+        You've been invited to join Heirs Life as a <b id="roleLabel"></b>. Create your password to activate your account.
+      </p>
+      <div id="formMsg" class="form-msg"></div>
+
+      <label>Full name</label>
+      <input type="text" id="fullName" disabled>
+
+      <label>Email</label>
+      <input type="email" id="emailField" disabled>
+
+      <label for="password">Create password</label>
+      <input type="password" id="password" placeholder="At least 8 characters" required autocomplete="new-password" minlength="8">
+
+      <label for="password2">Confirm password</label>
+      <input type="password" id="password2" placeholder="Re-enter password" required autocomplete="new-password" minlength="8">
+
+      <button type="submit" class="btn btn-primary" id="activateBtn">Activate account</button>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+  import { db, auth } from "./js/firebase-config.js";
+  import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+  import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+  import { roleHome, roleLabel } from "./js/auth.js";
+
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+
+  const stateLoading = document.getElementById("stateLoading");
+  const stateInvalid = document.getElementById("stateInvalid");
+  const invalidMsg = document.getElementById("invalidMsg");
+  const form = document.getElementById("activateForm");
+  const msg = document.getElementById("formMsg");
+
+  let invite = null;
+
+  async function loadInvite() {
+    if (!token) { showInvalid("No invitation token was found in this link."); return; }
+
+    try {
+      const snap = await getDoc(doc(db, "invitations", token));
+      if (!snap.exists()) { showInvalid("No invitation found for this link (token not found in the database)."); return; }
+
+      const data = snap.data();
+      const expired = data.expiresAt && data.expiresAt.toDate() < new Date();
+      if (data.used) { showInvalid("This invitation has already been used."); return; }
+      if (expired) { showInvalid("This invitation has expired."); return; }
+
+      invite = data;
+      document.getElementById("roleLabel").textContent = roleLabel(data.role);
+      document.getElementById("fullName").value = data.name;
+      document.getElementById("emailField").value = data.email;
+      stateLoading.style.display = "none";
+      form.style.display = "block";
+    } catch (err) {
+      console.error("Error loading invitation:", err.code || err.message, err);
+      showInvalid("Debug: " + (err.code || err.message));
+    }
+  }
+
+  function showInvalid(debugText) {
+    stateLoading.style.display = "none";
+    stateInvalid.style.display = "block";
+    if (debugText) {
+      invalidMsg.innerHTML =
+        "This invitation link is invalid, expired, or has already been used. Ask your manager to send you a new invitation." +
+        '<br><span style="opacity:.7;font-size:12px;">(' + debugText + ')</span>';
+    }
+  }
+
+  function showError(text) {
+    msg.textContent = text;
+    msg.className = "form-msg error";
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const p1 = document.getElementById("password").value;
+    const p2 = document.getElementById("password2").value;
+    if (p1 !== p2) { showError("Passwords don't match."); return; }
+    if (p1.length < 8) { showError("Password must be at least 8 characters."); return; }
+
+    const btn = document.getElementById("activateBtn");
+    btn.disabled = true;
+    btn.textContent = "Activating…";
+
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, invite.email, p1);
+      const uid = cred.user.uid;
+
+      // Cascade every lineage field present on the invitation onto the new
+      // profile. Which of these exist depends on the role: regional_head
+      // only gets regionId; regional_coordinator gets regionId+coordinationId;
+      // line_manager (AM) gets regionId+coordinationId+lineId; unit_manager
+      // and fa get all four. Same conditional pattern as before, just
+      // extended to the two new fields.
+      const userDoc = {
+        name: invite.name,
+        email: invite.email,
+        role: invite.role,
+        managerId: invite.invitedByUid,
+        status: "active",
+        createdAt: serverTimestamp()
+      };
+      if (invite.regionId) userDoc.regionId = invite.regionId;
+      if (invite.coordinationId) userDoc.coordinationId = invite.coordinationId;
+      if (invite.lineId) userDoc.lineId = invite.lineId;
+      if (invite.unitId) userDoc.unitId = invite.unitId;
+
+      await setDoc(doc(db, "users", uid), userDoc);
+
+      if (invite.role === "regional_head" && invite.regionId) {
+        await updateDoc(doc(db, "regions", invite.regionId), { regionalHeadId: uid });
+      }
+      if (invite.role === "regional_coordinator" && invite.coordinationId) {
+        await updateDoc(doc(db, "coordinations", invite.coordinationId), { coordinatorId: uid });
+      }
+      if (invite.role === "line_manager" && invite.lineId) {
+        await updateDoc(doc(db, "lines", invite.lineId), { lineManagerId: uid });
+      }
+      if (invite.role === "unit_manager" && invite.unitId) {
+        await updateDoc(doc(db, "units", invite.unitId), { unitManagerId: uid });
+      }
+
+      await updateDoc(doc(db, "invitations", token), {
+        used: true,
+        acceptedAt: serverTimestamp(),
+        acceptedUid: uid
+      });
+
+      window.location.href = roleHome(invite.role);
+    } catch (err) {
+      console.error("Activation error:", err.code || err.message, err);
+      if (err.code === "auth/email-already-in-use") {
+        showError("An account already exists using these details. Please log in or contact your administrator.");
+      } else {
+        showError("Something went wrong activating your account (" + (err.code || err.message) + "). Please try again.");
+      }
+      btn.disabled = false;
+      btn.textContent = "Activate account";
+    }
+  });
+
+  loadInvite();
+</script>
+</body>
+</html>
+itial-scale=1.0">
 <title>Activate your invitation — ASCEND</title>
 <link rel="stylesheet" href="css/styles.css">
   <link rel="icon" type="image/png" href="logo.png">
