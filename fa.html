@@ -65,6 +65,7 @@
     </div>
     <div class="sidebar-role">Financial Advisor</div>
     <div class="sidebar-name" id="userName">—</div>
+    <div class="sidebar-meta" id="sidebarMeta"></div>
     <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu">☰</button>
     <nav class="sidebar-nav">
       <button data-tab="capture" class="tab-nav active">Capture a prospect</button>
@@ -252,7 +253,7 @@
 <script type="module">
   import { db } from "./js/firebase-config.js";
   import {
-    collection, addDoc, doc, updateDoc, getDocs, query, where, serverTimestamp, Timestamp, arrayUnion
+    collection, addDoc, doc, getDoc, updateDoc, getDocs, query, where, serverTimestamp, Timestamp, arrayUnion
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
   import { guardPage, logout, escapeHtml, fmtDate, fmtDateTime, isToday, startInactivityTimer } from "./js/auth.js";
 
@@ -260,13 +261,30 @@
   let allProspects = [];
   let openId = null; // prospect currently shown in the detail modal
 
-  guardPage(["fa"], (profile) => {
+  guardPage(["fa"], async (profile) => {
     me = profile;
     document.getElementById("userName").textContent = profile.name;
     document.getElementById("pApptDate").min = todayStr();
+    loadHierarchyMeta();
     loadProspects();
     startInactivityTimer();
   });
+
+  // Show which Unit and Area (Line) this FA sits under, right in the sidebar.
+  async function loadHierarchyMeta() {
+    try {
+      const [unitSnap, lineSnap] = await Promise.all([
+        me.unitId ? getDoc(doc(db, "units", me.unitId)) : null,
+        me.lineId ? getDoc(doc(db, "lines", me.lineId)) : null
+      ]);
+      const parts = [];
+      if (unitSnap && unitSnap.exists()) parts.push("Unit: " + unitSnap.data().name);
+      if (lineSnap && lineSnap.exists()) parts.push("Area: " + lineSnap.data().name);
+      document.getElementById("sidebarMeta").innerHTML = parts.map(escapeHtml).join("<br>");
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
 
