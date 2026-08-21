@@ -207,7 +207,7 @@
   import {
     collection, addDoc, doc, updateDoc, getDocs, query, where, serverTimestamp, Timestamp, arrayUnion
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
-  import { guardPage, logout, escapeHtml, fmtDate, fmtDateTime, isToday } from "./js/auth.js";
+  import { guardPage, logout, escapeHtml, fmtDate, fmtDateTime, isToday, startInactivityTimer } from "./js/auth.js";
 
   let me = null;
   let allProspects = [];
@@ -218,6 +218,7 @@
     document.getElementById("userName").textContent = profile.name;
     document.getElementById("pApptDate").min = todayStr();
     loadProspects();
+    startInactivityTimer();
   });
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
