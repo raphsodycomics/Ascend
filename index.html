@@ -65,5 +65,13 @@
      also touches #loginForm — see js/login.js -->
 <script type="module" src="js/login.js"></script>
 
+<script type="module">
+  if (new URLSearchParams(window.location.search).get("timeout") === "1") {
+    const msg = document.getElementById("formMsg");
+    msg.textContent = "You were signed out after 5 minutes of inactivity, for your security. Please log in again.";
+    msg.className = "form-msg error";
+  }
+</script>
+
 </body>
 </html>
