@@ -217,9 +217,21 @@ service cloud.firestore {
         && request.resource.data.unitId == myProfile().unitId
         && request.resource.data.lineId == myProfile().lineId;
 
-      allow update: if isSignedIn()
-        && myRole() == 'fa'
-        && resource.data.faId == request.auth.uid;
+      // FAs update their own prospects (logging calls, marking sold/lost).
+      // Managers also need update access here — not to touch outcomes, but
+      // because reassigning an FA (transfer between Units/Lines/Coordinations/
+      // Regions) carries that FA's prospects along with them, denormalizing
+      // the new unitId/lineId/coordinationId/regionId onto each prospect doc.
+      // Scoped the same way the "get" rule above scopes reads, so a manager
+      // can only touch prospects already inside their own branch of the tree.
+      allow update: if isSignedIn() && (
+        (myRole() == 'fa' && resource.data.faId == request.auth.uid) ||
+        myRole() == 'admin' ||
+        (myRole() == 'regional_head' && resource.data.regionId == myProfile().regionId) ||
+        (myRole() == 'regional_coordinator' && resource.data.coordinationId == myProfile().coordinationId) ||
+        (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
+        (myRole() == 'unit_manager' && resource.data.unitId == myProfile().unitId)
+      );
 
       allow delete: if false; // history is preserved even after a sale or loss
     }
