@@ -129,7 +129,7 @@
     collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, serverTimestamp, Timestamp, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
 
-  import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday } from "./js/auth.js";
+  import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday, startInactivityTimer } from "./js/auth.js";
 
   let me = null;
   let currentFa = { id: null, name: null };
@@ -141,6 +141,7 @@
     const unitSnap = await getDoc(doc(db, "units", profile.unitId));
     if (unitSnap.exists()) document.getElementById("unitName").textContent = unitSnap.data().name;
     loadOverview();
+    startInactivityTimer();
   });
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
