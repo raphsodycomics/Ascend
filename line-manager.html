@@ -55,10 +55,10 @@
     </div>
 
     <div class="card">
-      <div class="card-header"><h3>Line-wide outcomes</h3></div>
-      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Every sale or loss across your whole Line, without opening each FA individually.</p>
-      <button type="button" class="btn btn-secondary" id="viewSoldBtn">View Sold</button>
-      <button type="button" class="btn btn-ghost" id="viewLostBtn" style="margin-left:10px;">View Lost</button>
+      <div class="card-header"><h3>Overview performance</h3></div>
+      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Collated totals across your whole Line — no client detail.</p>
+      <button type="button" class="btn btn-secondary" id="viewSoldBtn">Sold</button>
+      <button type="button" class="btn btn-ghost" id="viewLostBtn" style="margin-left:10px;">Lost</button>
     </div>
 
     <div class="card">
@@ -127,9 +127,9 @@
   </div>
 </div>
 
-<!-- Line-wide Sold / Lost rollup: FA, Client, Policy/Reason, Date -->
+<!-- Line-wide Sold / Lost collation: month above, year below — no client detail -->
 <div class="modal-overlay" id="lineOutcomeModal">
-  <div class="modal-box" style="max-width:680px;">
+  <div class="modal-box" style="max-width:560px;">
     <h3 id="lineOutcomeModalTitle">Sold</h3>
     <div id="lineOutcomeModalBody"><div class="loading-line">Loading…</div></div>
     <button class="btn btn-ghost" id="closeLineOutcomeModal" style="margin-top:14px;">Close</button>
@@ -180,6 +180,7 @@
     query, where, serverTimestamp, Timestamp, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday, roleLabel } from "./js/auth.js";
+  import { aggregateOutcomes, renderOutcomeAggregateHtml } from "./js/outcomes.js";
 
   let me = null;
   let currentFa = { id: null, name: null };
@@ -259,42 +260,15 @@
     renderPending(pendingSnap);
   }
 
-  // ---------------- Line-wide Sold / Lost rollup ----------------
-  // Pure client-side filter over allLineProspects, already fetched for the
-  // "Sold this month" stat — no extra Firestore reads.
+  // ---------------- Overview performance: Sold / Lost collation (month above, year below, no client detail) ----------------
+  // Pure client-side aggregation over allLineProspects, already fetched for
+  // the "Sold this month" stat — no extra Firestore reads.
 
   function openLineOutcomeModal(kind) {
-    document.getElementById("lineOutcomeModalTitle").textContent = kind === "sold" ? "Sold — across the Line" : "Lost — across the Line";
+    document.getElementById("lineOutcomeModalTitle").textContent = kind === "sold" ? "Sold" : "Lost";
     document.getElementById("lineOutcomeModal").classList.add("open");
-    const body = document.getElementById("lineOutcomeModalBody");
-
-    const rows = allLineProspects
-      .filter(p => getOutcome(p) === kind)
-      .sort((a, b) => {
-        const da = (a.closedAt || a.updatedAt)?.seconds || 0;
-        const dbb = (b.closedAt || b.updatedAt)?.seconds || 0;
-        return dbb - da;
-      });
-
-    if (rows.length === 0) {
-      body.innerHTML = `<div class="empty-state">No ${kind === "sold" ? "sales" : "losses"} recorded yet.</div>`;
-      return;
-    }
-
-    const thirdHeader = kind === "sold" ? "Policy" : "Reason";
-    let html = `<table><thead><tr><th>FA</th><th>Client</th><th>${thirdHeader}</th><th>Date</th></tr></thead><tbody>`;
-    rows.forEach(p => {
-      const faName = faNameById[p.faId] || "—";
-      const thirdCell = kind === "sold" ? escapeHtml(p.policySold || "—") : escapeHtml(p.lostReason || "—");
-      html += `<tr>
-        <td>${escapeHtml(faName)}</td>
-        <td>${escapeHtml(p.name)}</td>
-        <td>${thirdCell}</td>
-        <td>${fmtDate(p.closedAt || p.updatedAt)}</td>
-      </tr>`;
-    });
-    html += `</tbody></table>`;
-    body.innerHTML = html;
+    const agg = aggregateOutcomes(allLineProspects, kind);
+    document.getElementById("lineOutcomeModalBody").innerHTML = renderOutcomeAggregateHtml(agg, kind);
   }
 
   document.getElementById("viewSoldBtn").addEventListener("click", () => openLineOutcomeModal("sold"));
@@ -757,6 +731,8 @@
       const unitRef = await addDoc(collection(db, "units"), {
         name: unitName,
         lineId: me.lineId,
+        coordinationId: me.coordinationId,
+        regionId: me.regionId,
         unitManagerId: null,
         createdBy: me.uid,
         createdAt: serverTimestamp()
@@ -771,6 +747,8 @@
         role: "unit_manager",
         unitId: unitRef.id,
         lineId: me.lineId,
+        coordinationId: me.coordinationId,
+        regionId: me.regionId,
         invitedByUid: me.uid,
         invitedByName: me.name,
         used: false,
