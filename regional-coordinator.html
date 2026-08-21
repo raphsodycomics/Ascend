@@ -57,10 +57,10 @@
     </div>
 
     <div class="card">
-      <div class="card-header"><h3>Coordination-wide outcomes</h3></div>
-      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Every sale or loss across your whole Coordination, this week — client and outcome only.</p>
-      <button type="button" class="btn btn-secondary" id="viewSoldBtn">View Sold</button>
-      <button type="button" class="btn btn-ghost" id="viewLostBtn" style="margin-left:10px;">View Lost</button>
+      <div class="card-header"><h3>Overview performance</h3></div>
+      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Collated totals across your whole Coordination — no client detail.</p>
+      <button type="button" class="btn btn-secondary" id="viewSoldBtn">Sold</button>
+      <button type="button" class="btn btn-ghost" id="viewLostBtn" style="margin-left:10px;">Lost</button>
     </div>
 
     <div class="card">
@@ -139,13 +139,10 @@
   </div>
 </div>
 
-<!-- Coordination-wide Sold / Lost rollup (weekly): Client, Policy/Reason, Date only -->
+<!-- Coordination-wide Sold / Lost collation: month above, year below — no client detail -->
 <div class="modal-overlay" id="coordOutcomeModal">
-  <div class="modal-box" style="max-width:640px;">
-    <h3 id="coordOutcomeModalTitle">Sold — this week</h3>
-    <div class="counter-row">
-      <div class="counter-box"><div class="counter-label" id="coordCounterLabel">Policies sold</div><div class="counter-value" id="coordCounterValue">0</div></div>
-    </div>
+  <div class="modal-box" style="max-width:560px;">
+    <h3 id="coordOutcomeModalTitle">Sold</h3>
     <div id="coordOutcomeModalBody"><div class="loading-line">Loading…</div></div>
     <button class="btn btn-ghost" id="closeCoordOutcomeModal" style="margin-top:14px;">Close</button>
   </div>
@@ -195,6 +192,7 @@
     query, where, serverTimestamp, Timestamp, orderBy
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday } from "./js/auth.js";
+  import { aggregateOutcomes, renderOutcomeAggregateHtml } from "./js/outcomes.js";
 
   let me = null;
   let allLines = [];      // [{id, name, lineManagerId}] under this coordination
@@ -281,38 +279,13 @@
     renderPending(pendingSnap);
   }
 
-  // ---------------- Coordination-wide Sold/Lost rollup (weekly, client+outcome only) ----------------
+  // ---------------- Overview performance: Sold/Lost collation (month above, year below, no client detail) ----------------
 
   function openCoordOutcomeModal(kind) {
-    document.getElementById("coordOutcomeModalTitle").textContent = (kind === "sold" ? "Sold" : "Lost") + " — this week";
-    document.getElementById("coordCounterLabel").textContent = kind === "sold" ? "Policies sold" : "Prospects lost";
+    document.getElementById("coordOutcomeModalTitle").textContent = kind === "sold" ? "Sold" : "Lost";
     document.getElementById("coordOutcomeModal").classList.add("open");
-    const body = document.getElementById("coordOutcomeModalBody");
-
-    const weekStart = startOfWeek();
-    const rows = allCoordProspects
-      .filter(p => getOutcome(p) === kind)
-      .filter(p => {
-        const ts = p.closedAt || p.updatedAt;
-        return ts && ts.toDate() >= weekStart;
-      })
-      .sort((a, b) => ((b.closedAt || b.updatedAt)?.seconds || 0) - ((a.closedAt || a.updatedAt)?.seconds || 0));
-
-    document.getElementById("coordCounterValue").textContent = rows.length;
-
-    if (rows.length === 0) {
-      body.innerHTML = `<div class="empty-state">No ${kind === "sold" ? "sales" : "losses"} recorded this week.</div>`;
-      return;
-    }
-
-    const thirdHeader = kind === "sold" ? "Policy" : "Reason";
-    let html = `<table><thead><tr><th>Client</th><th>${thirdHeader}</th><th>Date</th></tr></thead><tbody>`;
-    rows.forEach(p => {
-      const thirdCell = kind === "sold" ? escapeHtml(p.policySold || "—") : escapeHtml(p.lostReason || "—");
-      html += `<tr><td>${escapeHtml(p.name)}</td><td>${thirdCell}</td><td>${fmtDate(p.closedAt || p.updatedAt)}</td></tr>`;
-    });
-    html += `</tbody></table>`;
-    body.innerHTML = html;
+    const agg = aggregateOutcomes(allCoordProspects, kind);
+    document.getElementById("coordOutcomeModalBody").innerHTML = renderOutcomeAggregateHtml(agg, kind);
   }
 
   document.getElementById("viewSoldBtn").addEventListener("click", () => openCoordOutcomeModal("sold"));
