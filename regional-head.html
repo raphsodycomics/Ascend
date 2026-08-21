@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regional Head — ASCEND</title>
+<link rel="stylesheet" href="css/styles.css">
+<link rel="icon" type="image/png" href="logo.png">
+<style>
+  .manage-actions { display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+  #rhTransferSection select { width:100%; margin-top:6px; }
+  .counter-row { display:flex; gap:14px; margin-bottom:18px; }
+  .counter-box { flex:1; background:var(--red-tint,#fbe7ea); border-radius:10px; padding:14px 16px; }
+  .counter-box .counter-label { font-size:12px; color:var(--muted,#888); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+  .counter-box .counter-value { font-family:var(--font-display); font-size:26px; font-weight:600; color:var(--ink,#111); }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="ascend-mark"><img src="logo.png" alt="ASCEND logo"></span>
+      <div class="sidebar-brand-text"><b>ASCEND</b><span>HEIRS LIFE</span></div>
+    </div>
+    <div class="sidebar-role">Regional Head</div>
+    <div class="sidebar-name" id="userName">—</div>
+    <nav class="sidebar-nav">
+      <a href="#" class="active">Overview</a>
+    </nav>
+    <div class="sidebar-logout">
+      <button id="logoutBtn">Log out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="main-header">
+      <h1 id="regionName">Region overview</h1>
+      <p>Your Regional Coordinators and Area Managers, at a glance.</p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Regional Coordinators</div><div class="stat-value" id="statRCs">–</div></div>
+      <div class="stat-card"><div class="stat-label">Area Managers</div><div class="stat-value" id="statAMs">–</div></div>
+      <div class="stat-card accent"><div class="stat-label">Sold this month</div><div class="stat-value" id="statSold">–</div></div>
+      <div class="stat-card"><div class="stat-label">Lost this month</div><div class="stat-value" id="statLost">–</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Invite a Regional Coordinator</h3></div>
+      <p style="margin-bottom:16px;">This creates a new Coordination and invites its first Regional Coordinator. They'll invite their own Area Managers once active.</p>
+      <div id="inviteMsg" class="form-msg"></div>
+      <form id="inviteForm">
+        <label for="coordName">Coordination name</label>
+        <input type="text" id="coordName" placeholder="e.g. Lagos Mainland Coordination" required>
+        <div class="field-row">
+          <div><label for="rcName">Regional Coordinator full name</label><input type="text" id="rcName" required></div>
+          <div><label for="rcEmail">Regional Coordinator email</label><input type="email" id="rcEmail" required></div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="inviteBtn">Generate invitation</button>
+      </form>
+    </div>
+
+    <div class="card" id="linkCard" style="display:none;">
+      <div class="card-header"><h3>Invitation ready</h3></div>
+      <p>Send this link to <b id="linkName"></b> directly. It expires in 48 hours and works once.</p>
+      <div class="link-box" id="linkBox"></div>
+      <button class="btn btn-secondary btn-sm" id="copyLinkBtn">Copy link</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Regional Coordinators</h3></div>
+      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Click a Coordinator to see their monthly sales and loss numbers for the whole Coordination.</p>
+      <div id="rcTableWrap"><div class="loading-line">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Area Managers</h3></div>
+      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Read-only list — reassign an Area Manager to a different Regional Coordinator with Manage.</p>
+      <div id="amTableWrap"><div class="loading-line">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Pending invitations</h3></div>
+      <div id="pendingTableWrap"><div class="loading-line">Loading…</div></div>
+    </div>
+  </main>
+</div>
+
+<!-- RC sales/loss drill-down: client + policy/reason only, monthly -->
+<div class="modal-overlay" id="rcStatsModal">
+  <div class="modal-box" style="max-width:680px;">
+    <h3 id="rcStatsModalTitle">Coordination performance</h3>
+    <p style="color:var(--muted);font-size:12px;margin:-8px 0 14px;">This month · no Unit or FA detail — client and outcome only.</p>
+    <div class="counter-row">
+      <div class="counter-box"><div class="counter-label">Policies sold</div><div class="counter-value" id="rcSoldCount">0</div></div>
+      <div class="counter-box"><div class="counter-label">Prospects lost</div><div class="counter-value" id="rcLostCount">0</div></div>
+    </div>
+    <div class="modal-tabs" style="display:flex;gap:8px;margin:0 0 16px;border-bottom:1px solid var(--hairline,#e5e5e5);">
+      <button class="modal-tab active" data-rcstatstab="sold" style="background:none;border:none;padding:8px 4px;margin-right:14px;font-size:14px;color:var(--muted,#888);cursor:pointer;border-bottom:2px solid transparent;">Sold</button>
+      <button class="modal-tab" data-rcstatstab="lost" style="background:none;border:none;padding:8px 4px;margin-right:14px;font-size:14px;color:var(--muted,#888);cursor:pointer;border-bottom:2px solid transparent;">Lost</button>
+    </div>
+    <div id="rcStatsModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeRcStatsModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Manage RC account: Reactivate / Suspend / Archive -->
+<div class="modal-overlay" id="manageRcModal">
+  <div class="modal-box" style="max-width:420px;">
+    <h3 id="manageRcModalTitle">Manage Regional Coordinator</h3>
+    <p style="color:var(--muted);font-size:13px;margin:6px 0 14px;">Current status: <span id="manageRcCurrentStatus"></span></p>
+    <div id="manageRcMsg" class="form-msg"></div>
+    <div class="manage-actions">
+      <button type="button" class="btn btn-primary" id="manageRcReactivateBtn">Reactivate</button>
+      <button type="button" class="btn btn-secondary" id="manageRcSuspendBtn">Suspend</button>
+      <button type="button" class="btn btn-ghost" id="manageRcArchiveBtn" style="color:var(--red);">Archive</button>
+    </div>
+    <p style="color:var(--muted);font-size:12px;margin-top:12px;">This only affects the Regional Coordinator's own access — Area Managers under this Coordination keep their access either way.</p>
+    <button type="button" class="btn btn-ghost" id="closeManageRcModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Transfer an Area Manager to another RC -->
+<div class="modal-overlay" id="transferAmModal">
+  <div class="modal-box" style="max-width:460px;">
+    <h3 id="transferAmModalTitle">Transfer Area Manager</h3>
+    <p style="color:var(--muted);font-size:13px;margin:6px 0 14px;">Current Coordination: <span id="transferAmCurrentCoord"></span></p>
+    <div id="transferAmMsg" class="form-msg"></div>
+    <label for="transferAmSelect">Destination Coordination</label>
+    <select id="transferAmSelect" style="width:100%;"></select>
+    <button type="button" class="btn btn-primary btn-sm" id="confirmTransferAmBtn" style="margin-top:14px;">Confirm transfer</button>
+    <button type="button" class="btn btn-ghost" id="closeTransferAmModal" style="margin-top:10px;">Close</button>
+  </div>
+</div>
+
+<script type="module">
+  import { db } from "./js/firebase-config.js";
+  import {
+    collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch,
+    query, where, serverTimestamp, Timestamp, orderBy
+  } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+  import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate } from "./js/auth.js";
+
+  let me = null;
+  let allCoordinations = []; // [{id, name, coordinatorId}]
+  let allAMs = []; // line_manager users under this region
+  let allLines = []; // lines under this region, for coordination name lookups etc.
+
+  guardPage(["regional_head"], async (profile) => {
+    me = profile;
+    document.getElementById("userName").textContent = profile.name;
+    const regionSnap = await getDoc(doc(db, "regions", profile.regionId));
+    if (regionSnap.exists()) document.getElementById("regionName").textContent = regionSnap.data().name;
+    loadOverview();
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", logout);
+
+  function getOutcome(p) {
+    if (p.outcome) return p.outcome;
+    if (p.status === "Sold") return "sold";
+    if (p.status === "Lost") return "lost";
+    return "active";
+  }
+
+  function statusBadgeAccount(status) {
+    const s = status || "active";
+    const map = { active: "green", deactivated: "amber", suspended: "amber", archived: "grey" };
+    const label = { active: "Active", deactivated: "Deactivated", suspended: "Suspended", archived: "Archived" };
+    return `<span class="badge ${map[s] || "grey"}"><span class="badge-dot"></span>${label[s] || s}</span>`;
+  }
+
+  async function loadOverview() {
+    const [coordSnap, amSnap, linesSnap, pendingSnap] = await Promise.all([
+      getDocs(query(collection(db, "coordinations"), where("regionId", "==", me.regionId), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "users"), where("regionId", "==", me.regionId), where("role", "==", "line_manager"))),
+      getDocs(query(collection(db, "lines"), where("regionId", "==", me.regionId))),
+      getDocs(query(collection(db, "invitations"), where("regionId", "==", me.regionId), where("role", "==", "regional_coordinator"), where("used", "==", false)))
+    ]);
+
+    allCoordinations = [];
+    coordSnap.forEach(d => allCoordinations.push({ id: d.id, ...d.data() }));
+
+    allAMs = [];
+    amSnap.forEach(d => allAMs.push({ id: d.id, ...d.data() }));
+
+    allLines = [];
+    linesSnap.forEach(d => allLines.push({ id: d.id, ...d.data() }));
+
+    document.getElementById("statRCs").textContent = allCoordinations.filter(c => c.coordinatorId).length;
+    document.getElementById("statAMs").textContent = allAMs.length;
+
+    // Region-wide sold/lost this month — one query across the whole region.
+    let soldCount = 0, lostCount = 0;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prospectsSnap = await getDocs(query(collection(db, "prospects"), where("regionId", "==", me.regionId)));
+    prospectsSnap.forEach(p => {
+      const d = p.data();
+      const closedTs = d.closedAt || d.updatedAt;
+      const o = getOutcome(d);
+      if (o === "sold" && closedTs && closedTs.toDate() >= monthStart) soldCount++;
+      if (o === "lost" && closedTs && closedTs.toDate() >= monthStart) lostCount++;
+    });
+    document.getElementById("statSold").textContent = soldCount;
+    document.getElementById("statLost").textContent = lostCount;
+
+    renderRCs();
+    renderAMs();
+    renderPending(pendingSnap);
+  }
+
+  // ---------------- Regional Coordinators table ----------------
+
+  function renderRCs() {
+    const wrap = document.getElementById("rcTableWrap");
+    if (allCoordinations.length === 0) { wrap.innerHTML = '<div class="empty-state">No Coordinations created yet. Invite your first Regional Coordinator above.</div>'; return; }
+
+    const amCountByCoord = {};
+    allAMs.forEach(am => { amCountByCoord[am.coordinationId] = (amCountByCoord[am.coordinationId] || 0) + 1; });
+
+    let rows = "";
+    allCoordinations.forEach(c => {
+      const isActive = !!c.coordinatorId;
+      const status = isActive
+        ? '<span class="badge green"><span class="badge-dot"></span>Active</span>'
+        : '<span class="badge amber"><span class="badge-dot"></span>Invited</span>';
+      const manageBtn = isActive
+        ? `<button type="button" class="btn btn-ghost btn-sm manage-rc" data-rc="${c.coordinatorId}" data-coordname="${escapeHtml(c.name)}">Manage</button>`
+        : `<button type="button" class="btn btn-ghost btn-sm delete-coord" data-coord="${c.id}" data-coordname="${escapeHtml(c.name)}" style="color:var(--red);">Delete</button>`;
+      const nameCell = isActive
+        ? `<span class="clickable-link" data-coord="${c.id}" data-coordname="${escapeHtml(c.name)}" style="cursor:pointer;text-decoration:underline;font-weight:600;">${escapeHtml(c.name)}</span>`
+        : `<b>${escapeHtml(c.name)}</b>`;
+      rows += `<tr>
+        <td>${nameCell}</td>
+        <td>${status}</td>
+        <td>${amCountByCoord[c.id] || 0}</td>
+        <td>${fmtDate(c.createdAt)}</td>
+        <td>${manageBtn}</td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Coordination</th><th>RC status</th><th>AMs</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+
+    wrap.querySelectorAll(".clickable-link").forEach(el => {
+      el.addEventListener("click", () => openRcStatsModal(el.dataset.coord, el.dataset.coordname));
+    });
+    wrap.querySelectorAll(".manage-rc").forEach(btn => {
+      btn.addEventListener("click", () => openManageRcModal(btn.dataset.rc, btn.dataset.coordname));
+    });
+    wrap.querySelectorAll(".delete-coord").forEach(btn => {
+      btn.addEventListener("click", () => deleteCoordination(btn.dataset.coord, btn.dataset.coordname, btn));
+    });
+  }
+
+  async function deleteCoordination(coordId, coordName, btn) {
+    if (!confirm(`Delete "${coordName}"? This also cancels its pending Regional Coordinator invitation. This cannot be undone.`)) return;
+    btn.disabled = true; btn.textContent = "Deleting…";
+    try {
+      const invSnap = await getDocs(query(collection(db, "invitations"), where("coordinationId", "==", coordId), where("used", "==", false)));
+      await Promise.all(invSnap.docs.map(d => deleteDoc(doc(db, "invitations", d.id))));
+      await deleteDoc(doc(db, "coordinations", coordId));
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      alert("Couldn't delete this Coordination (" + (err.code || err.message) + ").");
+      btn.disabled = false; btn.textContent = "Delete";
+    }
+  }
+
+  // ---------------- RC performance drill-down (sold/lost only, monthly) ----------------
+
+  let rcStatsCoordId = null;
+  let rcStatsProspects = [];
+  let rcStatsTab = "sold";
+
+  async function openRcStatsModal(coordId, coordName) {
+    rcStatsCoordId = coordId;
+    rcStatsTab = "sold";
+    document.getElementById("rcStatsModalTitle").textContent = coordName + " — this month";
+    setRcStatsTabUI();
+    document.getElementById("rcStatsModal").classList.add("open");
+    const body = document.getElementById("rcStatsModalBody");
+    body.innerHTML = '<div class="loading-line">Loading…</div>';
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const snap = await getDocs(query(collection(db, "prospects"), where("coordinationId", "==", coordId)));
+    rcStatsProspects = [];
+    snap.forEach(d => {
+      const p = { id: d.id, ...d.data() };
+      const closedTs = p.closedAt || p.updatedAt;
+      const o = getOutcome(p);
+      if ((o === "sold" || o === "lost") && closedTs && closedTs.toDate() >= monthStart) {
+        rcStatsProspects.push(p);
+      }
+    });
+
+    document.getElementById("rcSoldCount").textContent = rcStatsProspects.filter(p => getOutcome(p) === "sold").length;
+    document.getElementById("rcLostCount").textContent = rcStatsProspects.filter(p => getOutcome(p) === "lost").length;
+    renderRcStatsTab();
+  }
+
+  function setRcStatsTabUI() {
+    document.querySelectorAll("[data-rcstatstab]").forEach(b => {
+      const active = b.dataset.rcstatstab === rcStatsTab;
+      b.classList.toggle("active", active);
+      b.style.color = active ? "var(--ink,#111)" : "var(--muted,#888)";
+      b.style.fontWeight = active ? "600" : "normal";
+      b.style.borderBottomColor = active ? "var(--accent,var(--red,#111))" : "transparent";
+    });
+  }
+
+  document.querySelectorAll("[data-rcstatstab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      rcStatsTab = btn.dataset.rcstatstab;
+      setRcStatsTabUI();
+      renderRcStatsTab();
+    });
+  });
+
+  function renderRcStatsTab() {
+    const body = document.getElementById("rcStatsModalBody");
+    const rows = rcStatsProspects.filter(p => getOutcome(p) === rcStatsTab);
+    if (rows.length === 0) {
+      body.innerHTML = `<div class="empty-state">No ${rcStatsTab === "sold" ? "sales" : "losses"} recorded this month.</div>`;
+      return;
+    }
+    const thirdHeader = rcStatsTab === "sold" ? "Policy" : "Reason";
+    let html = `<table><thead><tr><th>Client</th><th>${thirdHeader}</th><th>Date</th></tr></thead><tbody>`;
+    rows
+      .sort((a, b) => ((b.closedAt || b.updatedAt)?.seconds || 0) - ((a.closedAt || a.updatedAt)?.seconds || 0))
+      .forEach(p => {
+        const thirdCell = rcStatsTab === "sold" ? escapeHtml(p.policySold || "—") : escapeHtml(p.lostReason || "—");
+        html += `<tr>
+          <td>${escapeHtml(p.name)}</td>
+          <td>${thirdCell}</td>
+          <td>${fmtDate(p.closedAt || p.updatedAt)}</td>
+        </tr>`;
+      });
+    html += `</tbody></table>`;
+    body.innerHTML = html;
+  }
+
+  document.getElementById("closeRcStatsModal").addEventListener("click", () => document.getElementById("rcStatsModal").classList.remove("open"));
+
+  // ---------------- Manage RC account ----------------
+
+  let manageRcId = null;
+
+  async function openManageRcModal(rcId, coordName) {
+    manageRcId = rcId;
+    document.getElementById("manageRcModalTitle").textContent = "Manage — " + coordName + " Coordinator";
+    document.getElementById("manageRcCurrentStatus").innerHTML = '<span class="badge grey"><span class="badge-dot"></span>Loading…</span>';
+    document.getElementById("manageRcMsg").className = "form-msg";
+    document.getElementById("manageRcModal").classList.add("open");
+    try {
+      const snap = await getDoc(doc(db, "users", rcId));
+      const status = snap.exists() ? snap.data().status : "active";
+      document.getElementById("manageRcCurrentStatus").innerHTML = statusBadgeAccount(status);
+    } catch (err) {
+      console.error(err);
+      document.getElementById("manageRcCurrentStatus").textContent = "Unknown";
+    }
+  }
+
+  document.getElementById("closeManageRcModal").addEventListener("click", () => document.getElementById("manageRcModal").classList.remove("open"));
+
+  async function setRcStatus(newStatus, btn) {
+    const msg = document.getElementById("manageRcMsg");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await updateDoc(doc(db, "users", manageRcId), { status: newStatus, updatedAt: serverTimestamp() });
+      document.getElementById("manageRcModal").classList.remove("open");
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't update this account (" + (err.code || err.message) + ").";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = original;
+  }
+
+  document.getElementById("manageRcReactivateBtn").addEventListener("click", (e) => setRcStatus("active", e.target));
+  document.getElementById("manageRcSuspendBtn").addEventListener("click", (e) => setRcStatus("suspended", e.target));
+  document.getElementById("manageRcArchiveBtn").addEventListener("click", (e) => {
+    if (!confirm("Archive this Regional Coordinator's account? They will immediately lose access until reactivated.")) return;
+    setRcStatus("archived", e.target);
+  });
+
+  // ---------------- Area Managers table (view-only, + transfer to another RC) ----------------
+
+  function renderAMs() {
+    const wrap = document.getElementById("amTableWrap");
+    if (allAMs.length === 0) { wrap.innerHTML = '<div class="empty-state">No Area Managers in this region yet.</div>'; return; }
+
+    const lineByAm = {};
+    allLines.forEach(l => { if (l.lineManagerId) lineByAm[l.lineManagerId] = l; });
+    const coordNameById = {};
+    allCoordinations.forEach(c => { coordNameById[c.id] = c.name; });
+
+    let rows = "";
+    allAMs.forEach(am => {
+      const line = lineByAm[am.id];
+      rows += `<tr>
+        <td><b>${escapeHtml(am.name)}</b></td>
+        <td>${escapeHtml(line ? line.name : "—")}</td>
+        <td>${escapeHtml(coordNameById[am.coordinationId] || "—")}</td>
+        <td>${statusBadgeAccount(am.status)}</td>
+        <td><button type="button" class="btn btn-ghost btn-sm transfer-am" data-am="${am.id}" data-amname="${escapeHtml(am.name)}" data-coord="${am.coordinationId || ""}">Manage</button></td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Area Manager</th><th>Line</th><th>Coordination</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+
+    wrap.querySelectorAll(".transfer-am").forEach(btn => {
+      btn.addEventListener("click", () => openTransferAmModal(btn.dataset.am, btn.dataset.amname, btn.dataset.coord));
+    });
+  }
+
+  let transferAmId = null;
+
+  function openTransferAmModal(amId, amName, currentCoordId) {
+    transferAmId = amId;
+    document.getElementById("transferAmModalTitle").textContent = "Transfer — " + amName;
+    const coordObj = allCoordinations.find(c => c.id === currentCoordId);
+    document.getElementById("transferAmCurrentCoord").textContent = coordObj ? coordObj.name : "—";
+    document.getElementById("transferAmMsg").className = "form-msg";
+
+    const select = document.getElementById("transferAmSelect");
+    select.innerHTML = allCoordinations
+      .filter(c => c.id !== currentCoordId && c.coordinatorId)
+      .map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
+      .join("");
+
+    document.getElementById("transferAmModal").classList.add("open");
+  }
+
+  document.getElementById("closeTransferAmModal").addEventListener("click", () => document.getElementById("transferAmModal").classList.remove("open"));
+
+  document.getElementById("confirmTransferAmBtn").addEventListener("click", async () => {
+    const destCoordId = document.getElementById("transferAmSelect").value;
+    if (!destCoordId) return;
+    if (!confirm("Transfer this Area Manager — and every Unit, FA and prospect under them — to the selected Coordination?")) return;
+
+    const destCoord = allCoordinations.find(c => c.id === destCoordId);
+    const msg = document.getElementById("transferAmMsg");
+    const btn = document.getElementById("confirmTransferAmBtn");
+    btn.disabled = true; btn.textContent = "Transferring…";
+    try {
+      // Cascade: the AM's line doc, the AM's own user doc, every Unit under
+      // that line, every FA under those Units, and every prospect they own
+      // all need coordinationId (and regionId, unchanged here) rewritten so
+      // downstream role-scoped queries keep working.
+      const amSnap = await getDoc(doc(db, "users", transferAmId));
+      if (!amSnap.exists()) throw new Error("Area Manager not found");
+      const lineId = amSnap.data().lineId;
+
+      const [unitsSnap, fasSnap, prospectsSnap] = await Promise.all([
+        getDocs(query(collection(db, "units"), where("lineId", "==", lineId))),
+        getDocs(query(collection(db, "users"), where("lineId", "==", lineId), where("role", "==", "fa"))),
+        getDocs(query(collection(db, "prospects"), where("lineId", "==", lineId)))
+      ]);
+
+      const batch = writeBatch(db);
+      batch.update(doc(db, "lines", lineId), { coordinationId: destCoordId, regionId: destCoord.regionId || me.regionId, updatedAt: serverTimestamp() });
+      batch.update(doc(db, "users", transferAmId), { coordinationId: destCoordId, updatedAt: serverTimestamp() });
+      unitsSnap.forEach(d => batch.update(doc(db, "units", d.id), { coordinationId: destCoordId, regionId: destCoord.regionId || me.regionId, updatedAt: serverTimestamp() }));
+      fasSnap.forEach(d => batch.update(doc(db, "users", d.id), { coordinationId: destCoordId, updatedAt: serverTimestamp() }));
+      prospectsSnap.forEach(d => batch.update(doc(db, "prospects", d.id), { coordinationId: destCoordId, updatedAt: serverTimestamp() }));
+      await batch.commit();
+
+      document.getElementById("transferAmModal").classList.remove("open");
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't complete the transfer (" + (err.code || err.message) + ").";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = "Confirm transfer";
+  });
+
+  // ---------------- Pending invitations ----------------
+
+  function renderPending(snap) {
+    const wrap = document.getElementById("pendingTableWrap");
+    const rows = [];
+    snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+    rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    if (rows.length === 0) { wrap.innerHTML = '<div class="empty-state">No pending invitations.</div>'; return; }
+
+    let html = "";
+    rows.forEach(inv => {
+      html += `<tr>
+        <td><b>${escapeHtml(inv.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(inv.email)}</span></td>
+        <td>${fmtDate(inv.createdAt)}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm copy-pending" data-token="${inv.id}">Copy link</button>
+          <button class="btn btn-ghost btn-sm delete-pending" data-token="${inv.id}" style="color:var(--red);margin-left:6px;">Delete</button>
+        </td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Invitee</th><th>Sent</th><th></th></tr></thead><tbody>${html}</tbody></table>`;
+    wrap.querySelectorAll(".copy-pending").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const link = inviteUrl(btn.dataset.token);
+        copyText(link);
+        btn.textContent = "Copied!";
+        setTimeout(() => btn.textContent = "Copy link", 1500);
+      });
+    });
+    wrap.querySelectorAll(".delete-pending").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this invitation? The link will stop working immediately.")) return;
+        btn.disabled = true; btn.textContent = "Deleting…";
+        try {
+          await deleteDoc(doc(db, "invitations", btn.dataset.token));
+          loadOverview();
+        } catch (err) {
+          console.error(err);
+          alert("Couldn't delete this invitation (" + (err.code || err.message) + ").");
+          btn.disabled = false; btn.textContent = "Delete";
+        }
+      });
+    });
+  }
+
+  document.getElementById("inviteForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById("inviteMsg");
+    msg.className = "form-msg";
+    const btn = document.getElementById("inviteBtn");
+    btn.disabled = true; btn.textContent = "Generating…";
+
+    const coordName = document.getElementById("coordName").value.trim();
+    const rcName = document.getElementById("rcName").value.trim();
+    const rcEmail = document.getElementById("rcEmail").value.trim().toLowerCase();
+
+    try {
+      const dupUser = await getDocs(query(collection(db, "users"), where("email", "==", rcEmail)));
+      const dupInvite = await getDocs(query(collection(db, "invitations"), where("email", "==", rcEmail), where("used", "==", false)));
+      if (!dupUser.empty || !dupInvite.empty) {
+        msg.textContent = "An account or pending invitation already exists using this email.";
+        msg.className = "form-msg error";
+        btn.disabled = false; btn.textContent = "Generate invitation";
+        return;
+      }
+
+      const coordRef = await addDoc(collection(db, "coordinations"), {
+        name: coordName,
+        regionId: me.regionId,
+        coordinatorId: null,
+        createdBy: me.uid,
+        createdAt: serverTimestamp()
+      });
+
+      const token = genToken();
+      const expires = Timestamp.fromDate(new Date(Date.now() + 48 * 60 * 60 * 1000));
+      await setDoc(doc(db, "invitations", token), {
+        token,
+        name: rcName,
+        email: rcEmail,
+        role: "regional_coordinator",
+        coordinationId: coordRef.id,
+        regionId: me.regionId,
+        invitedByUid: me.uid,
+        invitedByName: me.name,
+        used: false,
+        createdAt: serverTimestamp(),
+        expiresAt: expires
+      });
+
+      const link = inviteUrl(token);
+      document.getElementById("linkName").textContent = rcName;
+      document.getElementById("linkBox").textContent = link;
+      document.getElementById("linkCard").style.display = "block";
+      document.getElementById("copyLinkBtn").onclick = () => {
+        copyText(link);
+        document.getElementById("copyLinkBtn").textContent = "Copied!";
+        setTimeout(() => document.getElementById("copyLinkBtn").textContent = "Copy link", 1500);
+      };
+
+      e.target.reset();
+      msg.textContent = "Invitation generated.";
+      msg.className = "form-msg success";
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Something went wrong. Please try again.";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = "Generate invitation";
+  });
+</script>
+</body>
+</html>

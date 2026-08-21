@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regional Coordinator — ASCEND</title>
+<link rel="stylesheet" href="css/styles.css">
+<link rel="icon" type="image/png" href="logo.png">
+<style>
+  .modal-tabs { display:flex; gap:8px; margin:14px 0 16px; border-bottom:1px solid var(--border, #e5e5e5); }
+  .modal-tab { background:none; border:none; padding:8px 4px; margin-right:14px; font-size:14px; color:var(--muted,#888);
+               cursor:pointer; border-bottom:2px solid transparent; }
+  .modal-tab.active { color:var(--text,#111); border-bottom-color:var(--accent,#111); font-weight:600; }
+  .detail-row { padding:6px 0; font-size:14px; border-bottom:1px solid #f0f0f0; }
+  .detail-row b { display:inline-block; min-width:130px; color:var(--muted,#888); font-weight:500; }
+  .log-entry { padding:10px 0; border-bottom:1px solid #f0f0f0; }
+  .log-entry:last-child { border-bottom:none; }
+  .log-entry-date { font-size:12px; color:var(--muted,#888); margin-bottom:3px; }
+  .log-entry-text { font-size:14px; line-height:1.45; }
+  .manage-actions { display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+  #transferUnitSection select { width:100%; margin-top:6px; }
+  .counter-row { display:flex; gap:14px; margin-bottom:18px; }
+  .counter-box { flex:1; background:var(--red-tint,#fbe7ea); border-radius:10px; padding:14px 16px; }
+  .counter-box .counter-label { font-size:12px; color:var(--muted,#888); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+  .counter-box .counter-value { font-family:var(--font-display); font-size:26px; font-weight:600; color:var(--ink,#111); }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="ascend-mark"><img src="logo.png" alt="ASCEND logo"></span>
+      <div class="sidebar-brand-text"><b>ASCEND</b><span>HEIRS LIFE</span></div>
+    </div>
+    <div class="sidebar-role">Regional Coordinator</div>
+    <div class="sidebar-name" id="userName">—</div>
+    <nav class="sidebar-nav">
+      <a href="#" class="active">Overview</a>
+    </nav>
+    <div class="sidebar-logout">
+      <button id="logoutBtn">Log out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="main-header">
+      <h1 id="coordName">Coordination overview</h1>
+      <p>Every Area Manager, Unit and FA under your Coordination, rolled up in one place.</p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Area Managers</div><div class="stat-value" id="statAMs">–</div></div>
+      <div class="stat-card"><div class="stat-label">Units</div><div class="stat-value" id="statUnits">–</div></div>
+      <div class="stat-card"><div class="stat-label">Financial Advisors</div><div class="stat-value" id="statFAs">–</div></div>
+      <div class="stat-card accent"><div class="stat-label">Contacts captured today</div><div class="stat-value" id="statToday">–</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Coordination-wide outcomes</h3></div>
+      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Every sale or loss across your whole Coordination, this week — client and outcome only.</p>
+      <button type="button" class="btn btn-secondary" id="viewSoldBtn">View Sold</button>
+      <button type="button" class="btn btn-ghost" id="viewLostBtn" style="margin-left:10px;">View Lost</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Invite an Area Manager</h3></div>
+      <p style="margin-bottom:16px;">This creates a new Line under your Coordination and invites its first Area Manager.</p>
+      <div id="inviteMsg" class="form-msg"></div>
+      <form id="inviteForm">
+        <label for="lineName">Line name</label>
+        <input type="text" id="lineName" placeholder="e.g. Lagos Line 1" required>
+        <div class="field-row">
+          <div><label for="amName">Area Manager full name</label><input type="text" id="amName" required></div>
+          <div><label for="amEmail">Area Manager email</label><input type="email" id="amEmail" required></div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="inviteBtn">Generate invitation</button>
+      </form>
+    </div>
+
+    <div class="card" id="linkCard" style="display:none;">
+      <div class="card-header"><h3>Invitation ready</h3></div>
+      <p>Send this link to <b id="linkName"></b> directly. It expires in 48 hours and works once.</p>
+      <div class="link-box" id="linkBox"></div>
+      <button class="btn btn-secondary btn-sm" id="copyLinkBtn">Copy link</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Area Managers</h3></div>
+      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Click an Area Manager to view their Units and FAs, just like their own dashboard.</p>
+      <div id="amTableWrap"><div class="loading-line">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Pending invitations</h3></div>
+      <div id="pendingTableWrap"><div class="loading-line">Loading…</div></div>
+    </div>
+  </main>
+</div>
+
+<!-- AM drill-down: Units under this AM's Line -->
+<div class="modal-overlay" id="amModal">
+  <div class="modal-box" style="max-width:640px;">
+    <h3 id="amModalTitle">Area Manager</h3>
+    <div id="amModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeAmModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Unit drill-down: FAs in this Unit -->
+<div class="modal-overlay" id="unitModal">
+  <div class="modal-box" style="max-width:560px;">
+    <h3 id="unitModalTitle">Unit</h3>
+    <div id="unitModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeUnitModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- FA read-only drill-down: Prospects / Sold / Lost -->
+<div class="modal-overlay" id="faModal">
+  <div class="modal-box" style="max-width:720px;">
+    <h3 id="faModalTitle">FA activity</h3>
+    <div class="modal-tabs">
+      <button class="modal-tab active" data-modaltab="active">Prospects</button>
+      <button class="modal-tab" data-modaltab="sold">Sold</button>
+      <button class="modal-tab" data-modaltab="lost">Lost</button>
+    </div>
+    <div id="faModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeFaModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Prospect detail: info + full log history -->
+<div class="modal-overlay" id="logModal">
+  <div class="modal-box" style="max-width:560px;">
+    <h3 id="logModalTitle">Prospect</h3>
+    <div id="logModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeLogModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Coordination-wide Sold / Lost rollup (weekly): Client, Policy/Reason, Date only -->
+<div class="modal-overlay" id="coordOutcomeModal">
+  <div class="modal-box" style="max-width:640px;">
+    <h3 id="coordOutcomeModalTitle">Sold — this week</h3>
+    <div class="counter-row">
+      <div class="counter-box"><div class="counter-label" id="coordCounterLabel">Policies sold</div><div class="counter-value" id="coordCounterValue">0</div></div>
+    </div>
+    <div id="coordOutcomeModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeCoordOutcomeModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Manage Area Manager account: Reactivate / Deactivate / Archive (no RC transfer here — RH-only) -->
+<div class="modal-overlay" id="manageAmModal">
+  <div class="modal-box" style="max-width:420px;">
+    <h3 id="manageAmModalTitle">Manage Area Manager</h3>
+    <p style="color:var(--muted);font-size:13px;margin:6px 0 14px;">Current status: <span id="manageAmCurrentStatus"></span></p>
+    <div id="manageAmMsg" class="form-msg"></div>
+    <div class="manage-actions">
+      <button type="button" class="btn btn-primary" id="manageAmReactivateBtn">Reactivate</button>
+      <button type="button" class="btn btn-secondary" id="manageAmDeactivateBtn">Deactivate</button>
+      <button type="button" class="btn btn-ghost" id="manageAmArchiveBtn" style="color:var(--red);">Archive</button>
+    </div>
+    <p style="color:var(--muted);font-size:12px;margin-top:12px;">This only affects the Area Manager's own access — their Units and FAs keep their access either way. To move them to another Coordination, ask your Regional Head.</p>
+    <button type="button" class="btn btn-ghost" id="closeManageAmModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<!-- Manage Unit Manager account + Transfer the Unit to another Area Manager -->
+<div class="modal-overlay" id="manageUnitModal">
+  <div class="modal-box" style="max-width:460px;">
+    <h3 id="manageUnitModalTitle">Manage Unit Manager</h3>
+    <p style="color:var(--muted);font-size:13px;margin:6px 0 14px;">Current status: <span id="manageUnitCurrentStatus"></span> · Line: <span id="manageUnitCurrentLine"></span></p>
+    <div id="manageUnitMsg" class="form-msg"></div>
+    <div class="manage-actions">
+      <button type="button" class="btn btn-primary" id="manageUnitReactivateBtn">Reactivate</button>
+      <button type="button" class="btn btn-secondary" id="manageUnitSuspendBtn">Suspend</button>
+      <button type="button" class="btn btn-ghost" id="manageUnitArchiveBtn" style="color:var(--red);">Archive</button>
+      <button type="button" class="btn btn-ghost" id="manageUnitTransferToggleBtn">Transfer to another Area Manager…</button>
+    </div>
+    <div id="transferUnitSection" style="display:none;">
+      <label for="transferLineSelect">Destination Area Manager (Line)</label>
+      <select id="transferLineSelect"></select>
+      <button type="button" class="btn btn-primary btn-sm" id="confirmTransferUnitBtn" style="margin-top:10px;">Confirm transfer</button>
+    </div>
+    <button type="button" class="btn btn-ghost" id="closeManageUnitModal" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<script type="module">
+  import { db } from "./js/firebase-config.js";
+  import {
+    collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch,
+    query, where, serverTimestamp, Timestamp, orderBy
+  } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
+  import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, fmtDateTime, isToday } from "./js/auth.js";
+
+  let me = null;
+  let allLines = [];      // [{id, name, lineManagerId}] under this coordination
+  let amNameById = {};    // {lineManagerId: name}
+  let allUnitsCoord = []; // units across the whole coordination (for transfer destination lookups etc.)
+  let allCoordProspects = []; // full prospect list for the whole coordination
+
+  let currentAmLineId = null;
+  let currentFa = { id: null, name: null };
+  let currentFaProspects = [];
+  let faModalTab = "active";
+
+  guardPage(["regional_coordinator"], async (profile) => {
+    me = profile;
+    document.getElementById("userName").textContent = profile.name;
+    const coordSnap = await getDoc(doc(db, "coordinations", profile.coordinationId));
+    if (coordSnap.exists()) document.getElementById("coordName").textContent = coordSnap.data().name;
+    loadOverview();
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", logout);
+
+  function getOutcome(p) {
+    if (p.outcome) return p.outcome;
+    if (p.status === "Sold") return "sold";
+    if (p.status === "Lost") return "lost";
+    return "active";
+  }
+  function getLogs(p) { return Array.isArray(p.logs) ? p.logs : []; }
+
+  function statusBadgeAccount(status) {
+    const s = status || "active";
+    const map = { active: "green", deactivated: "amber", suspended: "amber", archived: "grey" };
+    const label = { active: "Active", deactivated: "Deactivated", suspended: "Suspended", archived: "Archived" };
+    return `<span class="badge ${map[s] || "grey"}"><span class="badge-dot"></span>${label[s] || s}</span>`;
+  }
+
+  // Monday 00:00 of the current week — used for "weekly" measurement.
+  function startOfWeek() {
+    const now = new Date();
+    const day = now.getDay(); // 0 = Sun
+    const diff = (day === 0 ? -6 : 1) - day; // shift back to Monday
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+    return monday;
+  }
+
+  async function loadOverview() {
+    const [linesSnap, amSnap, pendingSnap] = await Promise.all([
+      getDocs(query(collection(db, "lines"), where("coordinationId", "==", me.coordinationId), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "users"), where("coordinationId", "==", me.coordinationId), where("role", "==", "line_manager"))),
+      getDocs(query(collection(db, "invitations"), where("coordinationId", "==", me.coordinationId), where("role", "==", "line_manager"), where("used", "==", false)))
+    ]);
+
+    allLines = [];
+    linesSnap.forEach(d => allLines.push({ id: d.id, ...d.data() }));
+
+    amNameById = {};
+    amSnap.forEach(d => { amNameById[d.id] = d.data(); amNameById[d.id].uid = d.id; });
+
+    const [unitsSnap, faSnap] = await Promise.all([
+      getDocs(query(collection(db, "units"), where("coordinationId", "==", me.coordinationId))),
+      getDocs(query(collection(db, "users"), where("coordinationId", "==", me.coordinationId), where("role", "==", "fa")))
+    ]);
+    allUnitsCoord = [];
+    unitsSnap.forEach(d => allUnitsCoord.push({ id: d.id, ...d.data() }));
+
+    document.getElementById("statAMs").textContent = allLines.filter(l => l.lineManagerId).length;
+    document.getElementById("statUnits").textContent = allUnitsCoord.filter(u => u.unitManagerId).length;
+    document.getElementById("statFAs").textContent = faSnap.size;
+
+    let todayCount = 0;
+    allCoordProspects = [];
+    if (faSnap.size > 0) {
+      const prospectsSnap = await getDocs(query(collection(db, "prospects"), where("coordinationId", "==", me.coordinationId)));
+      prospectsSnap.forEach(p => {
+        const d = p.data();
+        allCoordProspects.push({ id: p.id, ...d });
+        if (isToday(d.createdAt)) todayCount++;
+      });
+    }
+    document.getElementById("statToday").textContent = todayCount;
+
+    renderAMs(unitsSnap, faSnap);
+    renderPending(pendingSnap);
+  }
+
+  // ---------------- Coordination-wide Sold/Lost rollup (weekly, client+outcome only) ----------------
+
+  function openCoordOutcomeModal(kind) {
+    document.getElementById("coordOutcomeModalTitle").textContent = (kind === "sold" ? "Sold" : "Lost") + " — this week";
+    document.getElementById("coordCounterLabel").textContent = kind === "sold" ? "Policies sold" : "Prospects lost";
+    document.getElementById("coordOutcomeModal").classList.add("open");
+    const body = document.getElementById("coordOutcomeModalBody");
+
+    const weekStart = startOfWeek();
+    const rows = allCoordProspects
+      .filter(p => getOutcome(p) === kind)
+      .filter(p => {
+        const ts = p.closedAt || p.updatedAt;
+        return ts && ts.toDate() >= weekStart;
+      })
+      .sort((a, b) => ((b.closedAt || b.updatedAt)?.seconds || 0) - ((a.closedAt || a.updatedAt)?.seconds || 0));
+
+    document.getElementById("coordCounterValue").textContent = rows.length;
+
+    if (rows.length === 0) {
+      body.innerHTML = `<div class="empty-state">No ${kind === "sold" ? "sales" : "losses"} recorded this week.</div>`;
+      return;
+    }
+
+    const thirdHeader = kind === "sold" ? "Policy" : "Reason";
+    let html = `<table><thead><tr><th>Client</th><th>${thirdHeader}</th><th>Date</th></tr></thead><tbody>`;
+    rows.forEach(p => {
+      const thirdCell = kind === "sold" ? escapeHtml(p.policySold || "—") : escapeHtml(p.lostReason || "—");
+      html += `<tr><td>${escapeHtml(p.name)}</td><td>${thirdCell}</td><td>${fmtDate(p.closedAt || p.updatedAt)}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    body.innerHTML = html;
+  }
+
+  document.getElementById("viewSoldBtn").addEventListener("click", () => openCoordOutcomeModal("sold"));
+  document.getElementById("viewLostBtn").addEventListener("click", () => openCoordOutcomeModal("lost"));
+  document.getElementById("closeCoordOutcomeModal").addEventListener("click", () => document.getElementById("coordOutcomeModal").classList.remove("open"));
+
+  // ---------------- Area Managers table ----------------
+
+  function renderAMs(unitsSnap, faSnap) {
+    const wrap = document.getElementById("amTableWrap");
+    if (allLines.length === 0) { wrap.innerHTML = '<div class="empty-state">No Lines created yet. Invite your first Area Manager above.</div>'; return; }
+
+    const unitCountByLine = {};
+    const faCountByLine = {};
+    allUnitsCoord.forEach(u => { unitCountByLine[u.lineId] = (unitCountByLine[u.lineId] || 0) + 1; });
+    faSnap.forEach(d => { const f = d.data(); faCountByLine[f.lineId] = (faCountByLine[f.lineId] || 0) + 1; });
+
+    let rows = "";
+    allLines.forEach(l => {
+      const isActive = !!l.lineManagerId;
+      const status = isActive
+        ? '<span class="badge green"><span class="badge-dot"></span>Active</span>'
+        : '<span class="badge amber"><span class="badge-dot"></span>Invited</span>';
+      const manageBtn = isActive
+        ? `<button type="button" class="btn btn-ghost btn-sm manage-am" data-am="${l.lineManagerId}" data-linename="${escapeHtml(l.name)}">Manage</button>`
+        : `<button type="button" class="btn btn-ghost btn-sm delete-line" data-line="${l.id}" data-linename="${escapeHtml(l.name)}" style="color:var(--red);">Delete</button>`;
+      const nameCell = isActive
+        ? `<span class="clickable-link" data-line="${l.id}" data-linename="${escapeHtml(l.name)}" style="cursor:pointer;text-decoration:underline;font-weight:600;">${escapeHtml(l.name)}</span>`
+        : `<b>${escapeHtml(l.name)}</b>`;
+      rows += `<tr>
+        <td>${nameCell}</td>
+        <td>${status}</td>
+        <td>${unitCountByLine[l.id] || 0}</td>
+        <td>${faCountByLine[l.id] || 0}</td>
+        <td>${fmtDate(l.createdAt)}</td>
+        <td>${manageBtn}</td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Area Manager (Line)</th><th>Status</th><th>Units</th><th>FAs</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+
+    wrap.querySelectorAll(".clickable-link").forEach(el => {
+      el.addEventListener("click", () => openAmModal(el.dataset.line, el.dataset.linename));
+    });
+    wrap.querySelectorAll(".manage-am").forEach(btn => {
+      btn.addEventListener("click", () => openManageAmModal(btn.dataset.am, btn.dataset.linename));
+    });
+    wrap.querySelectorAll(".delete-line").forEach(btn => {
+      btn.addEventListener("click", () => deleteLine(btn.dataset.line, btn.dataset.linename, btn));
+    });
+  }
+
+  async function deleteLine(lineId, lineName, btn) {
+    if (!confirm(`Delete "${lineName}"? This also cancels its pending Area Manager invitation. This cannot be undone.`)) return;
+    btn.disabled = true; btn.textContent = "Deleting…";
+    try {
+      const invSnap = await getDocs(query(collection(db, "invitations"), where("lineId", "==", lineId), where("used", "==", false)));
+      await Promise.all(invSnap.docs.map(d => deleteDoc(doc(db, "invitations", d.id))));
+      await deleteDoc(doc(db, "lines", lineId));
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      alert("Couldn't delete this Line (" + (err.code || err.message) + ").");
+      btn.disabled = false; btn.textContent = "Delete";
+    }
+  }
+
+  // ---------------- Manage Area Manager account (no RC-level transfer) ----------------
+
+  let manageAmId = null;
+
+  async function openManageAmModal(amId, lineName) {
+    manageAmId = amId;
+    document.getElementById("manageAmModalTitle").textContent = "Manage — " + lineName + " Area Manager";
+    document.getElementById("manageAmCurrentStatus").innerHTML = '<span class="badge grey"><span class="badge-dot"></span>Loading…</span>';
+    document.getElementById("manageAmMsg").className = "form-msg";
+    document.getElementById("manageAmModal").classList.add("open");
+    try {
+      const snap = await getDoc(doc(db, "users", amId));
+      const status = snap.exists() ? snap.data().status : "active";
+      document.getElementById("manageAmCurrentStatus").innerHTML = statusBadgeAccount(status);
+    } catch (err) {
+      console.error(err);
+      document.getElementById("manageAmCurrentStatus").textContent = "Unknown";
+    }
+  }
+
+  document.getElementById("closeManageAmModal").addEventListener("click", () => document.getElementById("manageAmModal").classList.remove("open"));
+
+  async function setAmStatus(newStatus, btn) {
+    const msg = document.getElementById("manageAmMsg");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await updateDoc(doc(db, "users", manageAmId), { status: newStatus, updatedAt: serverTimestamp() });
+      document.getElementById("manageAmModal").classList.remove("open");
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't update this account (" + (err.code || err.message) + ").";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = original;
+  }
+
+  document.getElementById("manageAmReactivateBtn").addEventListener("click", (e) => setAmStatus("active", e.target));
+  document.getElementById("manageAmDeactivateBtn").addEventListener("click", (e) => setAmStatus("deactivated", e.target));
+  document.getElementById("manageAmArchiveBtn").addEventListener("click", (e) => {
+    if (!confirm("Archive this Area Manager's account? They will immediately lose access until reactivated.")) return;
+    setAmStatus("archived", e.target);
+  });
+
+  // ---------------- AM drill-down (Units under that Line, mirrors line-manager.html) ----------------
+
+  async function openAmModal(lineId, lineName) {
+    currentAmLineId = lineId;
+    document.getElementById("amModalTitle").textContent = lineName + " — Units";
+    document.getElementById("amModal").classList.add("open");
+    const body = document.getElementById("amModalBody");
+    body.innerHTML = '<div class="loading-line">Loading…</div>';
+
+    const [unitsSnap, faSnap] = await Promise.all([
+      getDocs(query(collection(db, "units"), where("lineId", "==", lineId), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "users"), where("lineId", "==", lineId), where("role", "==", "fa")))
+    ]);
+
+    if (unitsSnap.empty) { body.innerHTML = '<div class="empty-state">No Units created yet under this Area Manager.</div>'; return; }
+
+    const faByUnit = {};
+    faSnap.forEach(d => { const u = d.data(); faByUnit[u.unitId] = (faByUnit[u.unitId] || 0) + 1; });
+
+    let rows = "";
+    unitsSnap.forEach(d => {
+      const u = d.data();
+      const isActive = !!u.unitManagerId;
+      const status = isActive
+        ? '<span class="badge green"><span class="badge-dot"></span>Active</span>'
+        : '<span class="badge amber"><span class="badge-dot"></span>Invited</span>';
+      const manageBtn = isActive
+        ? `<button type="button" class="btn btn-ghost btn-sm manage-unit" data-um="${u.unitManagerId}" data-unitname="${escapeHtml(u.name)}" data-linename="${escapeHtml(lineName)}">Manage</button>`
+        : "";
+      rows += `<tr class="clickable" data-unit="${d.id}" data-name="${escapeHtml(u.name)}">
+        <td><b>${escapeHtml(u.name)}</b></td>
+        <td>${status}</td>
+        <td>${faByUnit[d.id] || 0}</td>
+        <td>${fmtDate(u.createdAt)}</td>
+        <td>${manageBtn}</td>
+      </tr>`;
+    });
+    body.innerHTML = `<table><thead><tr><th>Unit</th><th>Unit Manager status</th><th>FAs</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+
+    body.querySelectorAll("tr.clickable").forEach(tr => {
+      tr.addEventListener("click", (e) => {
+        if (e.target.closest(".manage-unit")) return;
+        openUnitModal(tr.dataset.unit, tr.dataset.name);
+      });
+    });
+    body.querySelectorAll(".manage-unit").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openManageUnitModal(btn.dataset.um, btn.dataset.unitname, btn.dataset.linename);
+      });
+    });
+  }
+
+  document.getElementById("closeAmModal").addEventListener("click", () => document.getElementById("amModal").classList.remove("open"));
+
+  // ---------------- Unit drill-down (FAs in that Unit) ----------------
+
+  async function openUnitModal(unitId, unitName) {
+    document.getElementById("unitModalTitle").textContent = unitName;
+    document.getElementById("unitModal").classList.add("open");
+    const body = document.getElementById("unitModalBody");
+    body.innerHTML = '<div class="loading-line">Loading…</div>';
+
+    const faSnap = await getDocs(query(collection(db, "users"), where("unitId", "==", unitId), where("role", "==", "fa")));
+    if (faSnap.empty) { body.innerHTML = '<div class="empty-state">No Financial Advisors in this unit yet.</div>'; return; }
+
+    const prospectsSnap = await getDocs(query(collection(db, "prospects"), where("unitId", "==", unitId)));
+    const todayByFa = {};
+    prospectsSnap.forEach(p => {
+      const d = p.data();
+      if (isToday(d.createdAt)) todayByFa[d.faId] = (todayByFa[d.faId] || 0) + 1;
+    });
+
+    let rows = "";
+    faSnap.forEach(d => {
+      const fa = d.data();
+      const count = todayByFa[d.id] || 0;
+      const badge = count > 0
+        ? `<span class="badge green"><span class="badge-dot"></span>${count} today</span>`
+        : '<span class="badge red"><span class="badge-dot"></span>Not submitted</span>';
+      rows += `<tr class="clickable" data-fa="${d.id}" data-name="${escapeHtml(fa.name)}">
+        <td>${escapeHtml(fa.name)}</td>
+        <td>${badge}</td>
+      </tr>`;
+    });
+    body.innerHTML = `<table><thead><tr><th>FA</th><th>Today</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+    body.querySelectorAll("tr.clickable").forEach(tr => {
+      tr.addEventListener("click", () => openFaModal(tr.dataset.fa, tr.dataset.name));
+    });
+  }
+
+  document.getElementById("closeUnitModal").addEventListener("click", () => document.getElementById("unitModal").classList.remove("open"));
+
+  // ---------------- Manage Unit Manager account + Transfer Unit to another AM ----------------
+
+  let manageUnitManagerId = null;
+  let manageUnitId = null;
+
+  async function openManageUnitModal(umId, unitName, lineName) {
+    manageUnitManagerId = umId;
+    document.getElementById("manageUnitModalTitle").textContent = "Manage — " + unitName + " Unit Manager";
+    document.getElementById("manageUnitCurrentStatus").innerHTML = '<span class="badge grey"><span class="badge-dot"></span>Loading…</span>';
+    document.getElementById("manageUnitCurrentLine").textContent = lineName || "—";
+    document.getElementById("manageUnitMsg").className = "form-msg";
+    document.getElementById("transferUnitSection").style.display = "none";
+    document.getElementById("manageUnitModal").classList.add("open");
+    try {
+      const snap = await getDoc(doc(db, "users", umId));
+      const status = snap.exists() ? snap.data().status : "active";
+      manageUnitId = snap.exists() ? snap.data().unitId : null;
+      document.getElementById("manageUnitCurrentStatus").innerHTML = statusBadgeAccount(status);
+
+      const select = document.getElementById("transferLineSelect");
+      select.innerHTML = allLines
+        .filter(l => l.id !== currentAmLineId && l.lineManagerId)
+        .map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`)
+        .join("");
+    } catch (err) {
+      console.error(err);
+      document.getElementById("manageUnitCurrentStatus").textContent = "Unknown";
+    }
+  }
+
+  document.getElementById("closeManageUnitModal").addEventListener("click", () => document.getElementById("manageUnitModal").classList.remove("open"));
+
+  async function setUnitManagerStatus(newStatus, btn) {
+    const msg = document.getElementById("manageUnitMsg");
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      await updateDoc(doc(db, "users", manageUnitManagerId), { status: newStatus, updatedAt: serverTimestamp() });
+      document.getElementById("manageUnitModal").classList.remove("open");
+      document.getElementById("amModal").classList.remove("open");
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't update this account (" + (err.code || err.message) + ").";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = original;
+  }
+
+  document.getElementById("manageUnitReactivateBtn").addEventListener("click", (e) => setUnitManagerStatus("active", e.target));
+  document.getElementById("manageUnitSuspendBtn").addEventListener("click", (e) => setUnitManagerStatus("suspended", e.target));
+  document.getElementById("manageUnitArchiveBtn").addEventListener("click", (e) => {
+    if (!confirm("Archive this Unit Manager's account? They will immediately lose access until reactivated.")) return;
+    setUnitManagerStatus("archived", e.target);
+  });
+
+  document.getElementById("manageUnitTransferToggleBtn").addEventListener("click", () => {
+    const sec = document.getElementById("transferUnitSection");
+    sec.style.display = sec.style.display === "none" ? "block" : "none";
+  });
+
+  document.getElementById("confirmTransferUnitBtn").addEventListener("click", async () => {
+    const destLineId = document.getElementById("transferLineSelect").value;
+    if (!destLineId || !manageUnitId) return;
+    if (!confirm("Transfer this Unit — its Unit Manager, every FA, and every prospect — to the selected Area Manager?")) return;
+
+    const msg = document.getElementById("manageUnitMsg");
+    const btn = document.getElementById("confirmTransferUnitBtn");
+    btn.disabled = true; btn.textContent = "Transferring…";
+    try {
+      // Both source and destination Lines stay inside this Coordination, so
+      // only lineId changes here — coordinationId/regionId are untouched.
+      const [fasSnap, prospectsSnap] = await Promise.all([
+        getDocs(query(collection(db, "users"), where("unitId", "==", manageUnitId), where("role", "==", "fa"))),
+        getDocs(query(collection(db, "prospects"), where("unitId", "==", manageUnitId)))
+      ]);
+
+      const batch = writeBatch(db);
+      batch.update(doc(db, "units", manageUnitId), { lineId: destLineId, updatedAt: serverTimestamp() });
+      batch.update(doc(db, "users", manageUnitManagerId), { lineId: destLineId, updatedAt: serverTimestamp() });
+      fasSnap.forEach(d => batch.update(doc(db, "users", d.id), { lineId: destLineId, updatedAt: serverTimestamp() }));
+      prospectsSnap.forEach(d => batch.update(doc(db, "prospects", d.id), { lineId: destLineId, updatedAt: serverTimestamp() }));
+      await batch.commit();
+
+      document.getElementById("manageUnitModal").classList.remove("open");
+      document.getElementById("amModal").classList.remove("open");
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Couldn't complete the transfer (" + (err.code || err.message) + ").";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = "Confirm transfer";
+  });
+
+  // ---------------- FA drill-down modal (Prospects / Sold / Lost) — read only ----------------
+
+  async function openFaModal(faId, faName) {
+    currentFa = { id: faId, name: faName };
+    faModalTab = "active";
+    document.getElementById("faModalTitle").textContent = faName + " — activity";
+    setModalTabUI();
+    document.getElementById("faModal").classList.add("open");
+
+    const body = document.getElementById("faModalBody");
+    body.innerHTML = '<div class="loading-line">Loading…</div>';
+    try {
+      const snap = await getDocs(query(collection(db, "prospects"), where("faId", "==", faId)));
+      currentFaProspects = [];
+      snap.forEach(d => currentFaProspects.push({ id: d.id, ...d.data() }));
+      currentFaProspects.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    } catch (err) {
+      console.error(err);
+      currentFaProspects = [];
+      body.innerHTML = '<div class="empty-state">Could not load this FA\'s prospects right now.</div>';
+      return;
+    }
+    renderFaModalTab();
+  }
+
+  function setModalTabUI() {
+    document.querySelectorAll(".modal-tab").forEach(b => {
+      b.classList.toggle("active", b.dataset.modaltab === faModalTab);
+    });
+  }
+
+  document.querySelectorAll(".modal-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      faModalTab = btn.dataset.modaltab;
+      setModalTabUI();
+      renderFaModalTab();
+    });
+  });
+
+  function renderFaModalTab() {
+    const body = document.getElementById("faModalBody");
+    const rows = currentFaProspects.filter(p => getOutcome(p) === faModalTab);
+
+    if (rows.length === 0) {
+      const label = faModalTab === "active" ? "active prospects" : faModalTab + " prospects";
+      body.innerHTML = `<div class="empty-state">No ${label} yet.</div>`;
+      return;
+    }
+
+    let thirdHeader, dateHeader;
+    if (faModalTab === "sold") { thirdHeader = "Policy"; dateHeader = "Sold on"; }
+    else if (faModalTab === "lost") { thirdHeader = "Reason"; dateHeader = "Closed on"; }
+    else { thirdHeader = "Logs"; dateHeader = "Captured"; }
+
+    let html = `<table><thead><tr><th>Prospect</th><th>Phone</th><th>${thirdHeader}</th><th>${dateHeader}</th></tr></thead><tbody>`;
+    rows.forEach(p => {
+      let thirdCell, dateCell;
+      if (faModalTab === "sold") {
+        thirdCell = escapeHtml(p.policySold || "—");
+        dateCell = fmtDate(p.closedAt || p.updatedAt);
+      } else if (faModalTab === "lost") {
+        thirdCell = escapeHtml(p.lostReason || "—");
+        dateCell = fmtDate(p.closedAt || p.updatedAt);
+      } else {
+        const n = getLogs(p).length;
+        thirdCell = `<span class="badge grey"><span class="badge-dot"></span>${n} log${n === 1 ? "" : "s"}</span>`;
+        dateCell = fmtDate(p.createdAt);
+      }
+
+      html += `<tr class="clickable" data-id="${p.id}" data-name="${escapeHtml(p.name)}">
+        <td><b>${escapeHtml(p.name)}</b></td>
+        <td>${escapeHtml(p.phone || "—")}</td>
+        <td>${thirdCell}</td>
+        <td>${dateCell}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    body.innerHTML = html;
+
+    body.querySelectorAll("tr.clickable").forEach(tr => {
+      tr.addEventListener("click", () => openLogModal(tr.dataset.id, tr.dataset.name));
+    });
+  }
+
+  document.getElementById("closeFaModal").addEventListener("click", () => document.getElementById("faModal").classList.remove("open"));
+
+  // ---------------- Prospect detail + log history (read-only) ----------------
+
+  function openLogModal(prospectId, name) {
+    document.getElementById("logModalTitle").textContent = name;
+    document.getElementById("logModal").classList.add("open");
+    const body = document.getElementById("logModalBody");
+
+    const p = currentFaProspects.find(x => x.id === prospectId);
+    if (!p) { body.innerHTML = '<div class="empty-state">Prospect not found.</div>'; return; }
+
+    const logs = getLogs(p).slice().sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    const logsHtml = logs.length === 0
+      ? '<div class="empty-state">No log entries yet.</div>'
+      : logs.map(l => `
+          <div class="log-entry">
+            <div class="log-entry-date">${fmtDateTime(l.createdAt)}</div>
+            <div class="log-entry-text">${escapeHtml(l.text)}</div>
+          </div>`).join("");
+
+    const outcome = getOutcome(p);
+    let closeoutHtml = "";
+    if (outcome === "sold") {
+      closeoutHtml = `<div class="detail-row"><b>Policy sold</b>${escapeHtml(p.policySold || "—")}</div>`;
+    } else if (outcome === "lost") {
+      closeoutHtml = `<div class="detail-row"><b>Reason lost</b>${escapeHtml(p.lostReason || "—")}</div>`;
+    }
+
+    body.innerHTML = `
+      <div class="detail-row"><b>Phone</b>${escapeHtml(p.phone || "—")}</div>
+      <div class="detail-row"><b>Location</b>${escapeHtml(p.location || "—")}</div>
+      ${p.nextAppointmentDate ? `<div class="detail-row"><b>Next appointment</b>${escapeHtml(p.nextAppointmentDate)} ${p.nextAppointmentTime ? "· " + escapeHtml(p.nextAppointmentTime) : ""}</div>` : ""}
+      ${closeoutHtml}
+      <h4 style="margin-top:18px;margin-bottom:8px;">Log entries</h4>
+      ${logsHtml}
+    `;
+  }
+
+  document.getElementById("closeLogModal").addEventListener("click", () => document.getElementById("logModal").classList.remove("open"));
+
+  // ---------------- Pending invitations ----------------
+
+  function renderPending(snap) {
+    const wrap = document.getElementById("pendingTableWrap");
+    const rows = [];
+    snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+    rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    if (rows.length === 0) { wrap.innerHTML = '<div class="empty-state">No pending invitations.</div>'; return; }
+
+    let html = "";
+    rows.forEach(inv => {
+      html += `<tr>
+        <td><b>${escapeHtml(inv.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(inv.email)}</span></td>
+        <td>${fmtDate(inv.createdAt)}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm copy-pending" data-token="${inv.id}">Copy link</button>
+          <button class="btn btn-ghost btn-sm delete-pending" data-token="${inv.id}" style="color:var(--red);margin-left:6px;">Delete</button>
+        </td>
+      </tr>`;
+    });
+    wrap.innerHTML = `<table><thead><tr><th>Invitee</th><th>Sent</th><th></th></tr></thead><tbody>${html}</tbody></table>`;
+    wrap.querySelectorAll(".copy-pending").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const link = inviteUrl(btn.dataset.token);
+        copyText(link);
+        btn.textContent = "Copied!";
+        setTimeout(() => btn.textContent = "Copy link", 1500);
+      });
+    });
+    wrap.querySelectorAll(".delete-pending").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this invitation? The link will stop working immediately.")) return;
+        btn.disabled = true; btn.textContent = "Deleting…";
+        try {
+          await deleteDoc(doc(db, "invitations", btn.dataset.token));
+          loadOverview();
+        } catch (err) {
+          console.error(err);
+          alert("Couldn't delete this invitation (" + (err.code || err.message) + ").");
+          btn.disabled = false; btn.textContent = "Delete";
+        }
+      });
+    });
+  }
+
+  document.getElementById("inviteForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById("inviteMsg");
+    msg.className = "form-msg";
+    const btn = document.getElementById("inviteBtn");
+    btn.disabled = true; btn.textContent = "Generating…";
+
+    const lineName = document.getElementById("lineName").value.trim();
+    const amName = document.getElementById("amName").value.trim();
+    const amEmail = document.getElementById("amEmail").value.trim().toLowerCase();
+
+    try {
+      const dupUser = await getDocs(query(collection(db, "users"), where("email", "==", amEmail)));
+      const dupInvite = await getDocs(query(collection(db, "invitations"), where("email", "==", amEmail), where("used", "==", false)));
+      if (!dupUser.empty || !dupInvite.empty) {
+        msg.textContent = "An account or pending invitation already exists using this email.";
+        msg.className = "form-msg error";
+        btn.disabled = false; btn.textContent = "Generate invitation";
+        return;
+      }
+
+      const lineRef = await addDoc(collection(db, "lines"), {
+        name: lineName,
+        coordinationId: me.coordinationId,
+        regionId: me.regionId,
+        lineManagerId: null,
+        createdBy: me.uid,
+        createdAt: serverTimestamp()
+      });
+
+      const token = genToken();
+      const expires = Timestamp.fromDate(new Date(Date.now() + 48 * 60 * 60 * 1000));
+      await setDoc(doc(db, "invitations", token), {
+        token,
+        name: amName,
+        email: amEmail,
+        role: "line_manager",
+        lineId: lineRef.id,
+        coordinationId: me.coordinationId,
+        regionId: me.regionId,
+        invitedByUid: me.uid,
+        invitedByName: me.name,
+        used: false,
+        createdAt: serverTimestamp(),
+        expiresAt: expires
+      });
+
+      const link = inviteUrl(token);
+      document.getElementById("linkName").textContent = amName;
+      document.getElementById("linkBox").textContent = link;
+      document.getElementById("linkCard").style.display = "block";
+      document.getElementById("copyLinkBtn").onclick = () => {
+        copyText(link);
+        document.getElementById("copyLinkBtn").textContent = "Copied!";
+        setTimeout(() => document.getElementById("copyLinkBtn").textContent = "Copy link", 1500);
+      };
+
+      e.target.reset();
+      msg.textContent = "Invitation generated.";
+      msg.className = "form-msg success";
+      loadOverview();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = "Something went wrong. Please try again.";
+      msg.className = "form-msg error";
+    }
+    btn.disabled = false; btn.textContent = "Generate invitation";
+  });
+</script>
+</body>
+</html>
