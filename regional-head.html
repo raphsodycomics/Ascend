@@ -27,6 +27,8 @@
     <div class="sidebar-name" id="userName">—</div>
     <nav class="sidebar-nav">
       <a href="#" class="active">Overview</a>
+      <button type="button" id="viewSoldBtn">Sold</button>
+      <button type="button" id="viewLostBtn">Lost</button>
     </nav>
     <div class="sidebar-logout">
       <button id="logoutBtn">Log out</button>
@@ -44,13 +46,6 @@
       <div class="stat-card"><div class="stat-label">Area Managers</div><div class="stat-value" id="statAMs">–</div></div>
       <div class="stat-card accent"><div class="stat-label">Sold this month</div><div class="stat-value" id="statSold">–</div></div>
       <div class="stat-card"><div class="stat-label">Lost this month</div><div class="stat-value" id="statLost">–</div></div>
-    </div>
-
-    <div class="card">
-      <div class="card-header"><h3>Overview performance</h3></div>
-      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Collated totals across your whole Region — no client detail.</p>
-      <button type="button" class="btn btn-secondary" id="viewSoldBtn">Sold</button>
-      <button type="button" class="btn btn-ghost" id="viewLostBtn" style="margin-left:10px;">Lost</button>
     </div>
 
     <div class="card">
@@ -170,7 +165,11 @@
     document.getElementById("userName").textContent = profile.name;
     const regionSnap = await getDoc(doc(db, "regions", profile.regionId));
     if (regionSnap.exists()) document.getElementById("regionName").textContent = regionSnap.data().name;
-    loadOverview();
+    loadOverview().catch(err => {
+      console.error(err);
+      document.getElementById("rcTableWrap").innerHTML =
+        '<div class="empty-state">Couldn\'t load the dashboard (' + (err.code || err.message) + '). Check the browser console — if this is a Firestore index error, open the link it prints, then reload.</div>';
+    });
   });
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
@@ -203,8 +202,12 @@
   }
 
   async function loadOverview() {
+    // NOTE: deliberately no orderBy() combined with where() here — that
+    // combination needs a Firestore composite index that doesn't exist by
+    // default. Fetch by the equality filter alone, sort in JS (mirrors the
+    // FA page's trick).
     const [coordSnap, amSnap, linesSnap, pendingSnap] = await Promise.all([
-      getDocs(query(collection(db, "coordinations"), where("regionId", "==", me.regionId), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "coordinations"), where("regionId", "==", me.regionId))),
       getDocs(query(collection(db, "users"), where("regionId", "==", me.regionId), where("role", "==", "line_manager"))),
       getDocs(query(collection(db, "lines"), where("regionId", "==", me.regionId))),
       getDocs(query(collection(db, "invitations"), where("regionId", "==", me.regionId), where("role", "==", "regional_coordinator"), where("used", "==", false)))
@@ -212,6 +215,7 @@
 
     allCoordinations = [];
     coordSnap.forEach(d => allCoordinations.push({ id: d.id, ...d.data() }));
+    allCoordinations.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
     allAMs = [];
     amSnap.forEach(d => allAMs.push({ id: d.id, ...d.data() }));
