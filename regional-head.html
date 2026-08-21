@@ -151,7 +151,7 @@
     collection, addDoc, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch,
     query, where, serverTimestamp, Timestamp, orderBy
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
-  import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate } from "./js/auth.js";
+  import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate, startInactivityTimer } from "./js/auth.js";
   import { aggregateOutcomes, renderOutcomeAggregateHtml } from "./js/outcomes.js";
 
   let me = null;
@@ -170,6 +170,7 @@
       document.getElementById("rcTableWrap").innerHTML =
         '<div class="empty-state">Couldn\'t load the dashboard (' + (err.code || err.message) + '). Check the browser console — if this is a Firestore index error, open the link it prints, then reload.</div>';
     });
+    startInactivityTimer();
   });
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
