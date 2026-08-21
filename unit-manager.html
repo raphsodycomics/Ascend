@@ -32,6 +32,7 @@
     </div>
     <div class="sidebar-role">Unit Manager</div>
     <div class="sidebar-name" id="userName">—</div>
+    <div class="sidebar-meta" id="sidebarMeta"></div>
     <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu">☰</button>
     <nav class="sidebar-nav">
       <a href="#" class="active">Overview</a>
@@ -141,9 +142,26 @@
     document.getElementById("userName").textContent = profile.name;
     const unitSnap = await getDoc(doc(db, "units", profile.unitId));
     if (unitSnap.exists()) document.getElementById("unitName").textContent = unitSnap.data().name;
+    loadHierarchyMeta();
     loadOverview();
     startInactivityTimer();
   });
+
+  // Show which Area (Line) and Region this Unit Manager sits under.
+  async function loadHierarchyMeta() {
+    try {
+      const [lineSnap, regionSnap] = await Promise.all([
+        me.lineId ? getDoc(doc(db, "lines", me.lineId)) : null,
+        me.regionId ? getDoc(doc(db, "regions", me.regionId)) : null
+      ]);
+      const parts = [];
+      if (lineSnap && lineSnap.exists()) parts.push("Area: " + lineSnap.data().name);
+      if (regionSnap && regionSnap.exists()) parts.push("Region: " + regionSnap.data().name);
+      document.getElementById("sidebarMeta").innerHTML = parts.map(escapeHtml).join("<br>");
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
 
