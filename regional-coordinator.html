@@ -37,6 +37,8 @@
     <div class="sidebar-name" id="userName">—</div>
     <nav class="sidebar-nav">
       <a href="#" class="active">Overview</a>
+      <button type="button" id="viewSoldBtn">Sold</button>
+      <button type="button" id="viewLostBtn">Lost</button>
     </nav>
     <div class="sidebar-logout">
       <button id="logoutBtn">Log out</button>
@@ -54,13 +56,6 @@
       <div class="stat-card"><div class="stat-label">Units</div><div class="stat-value" id="statUnits">–</div></div>
       <div class="stat-card"><div class="stat-label">Financial Advisors</div><div class="stat-value" id="statFAs">–</div></div>
       <div class="stat-card accent"><div class="stat-label">Contacts captured today</div><div class="stat-value" id="statToday">–</div></div>
-    </div>
-
-    <div class="card">
-      <div class="card-header"><h3>Overview performance</h3></div>
-      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Collated totals across your whole Coordination — no client detail.</p>
-      <button type="button" class="btn btn-secondary" id="viewSoldBtn">Sold</button>
-      <button type="button" class="btn btn-ghost" id="viewLostBtn" style="margin-left:10px;">Lost</button>
     </div>
 
     <div class="card">
@@ -210,7 +205,11 @@
     document.getElementById("userName").textContent = profile.name;
     const coordSnap = await getDoc(doc(db, "coordinations", profile.coordinationId));
     if (coordSnap.exists()) document.getElementById("coordName").textContent = coordSnap.data().name;
-    loadOverview();
+    loadOverview().catch(err => {
+      console.error(err);
+      document.getElementById("amTableWrap").innerHTML =
+        '<div class="empty-state">Couldn\'t load the dashboard (' + (err.code || err.message) + '). Check the browser console — if this is a Firestore index error, open the link it prints, then reload.</div>';
+    });
   });
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
@@ -240,14 +239,19 @@
   }
 
   async function loadOverview() {
+    // NOTE: deliberately no orderBy() combined with where() here — that
+    // combination needs a Firestore composite index that doesn't exist by
+    // default. Fetch by the equality filter alone, sort in JS (mirrors the
+    // FA page's trick).
     const [linesSnap, amSnap, pendingSnap] = await Promise.all([
-      getDocs(query(collection(db, "lines"), where("coordinationId", "==", me.coordinationId), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "lines"), where("coordinationId", "==", me.coordinationId))),
       getDocs(query(collection(db, "users"), where("coordinationId", "==", me.coordinationId), where("role", "==", "line_manager"))),
       getDocs(query(collection(db, "invitations"), where("coordinationId", "==", me.coordinationId), where("role", "==", "line_manager"), where("used", "==", false)))
     ]);
 
     allLines = [];
     linesSnap.forEach(d => allLines.push({ id: d.id, ...d.data() }));
+    allLines.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
     amNameById = {};
     amSnap.forEach(d => { amNameById[d.id] = d.data(); amNameById[d.id].uid = d.id; });
@@ -407,7 +411,7 @@
     body.innerHTML = '<div class="loading-line">Loading…</div>';
 
     const [unitsSnap, faSnap] = await Promise.all([
-      getDocs(query(collection(db, "units"), where("lineId", "==", lineId), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "units"), where("lineId", "==", lineId))),
       getDocs(query(collection(db, "users"), where("lineId", "==", lineId), where("role", "==", "fa")))
     ]);
 
@@ -417,7 +421,8 @@
     faSnap.forEach(d => { const u = d.data(); faByUnit[u.unitId] = (faByUnit[u.unitId] || 0) + 1; });
 
     let rows = "";
-    unitsSnap.forEach(d => {
+    const unitDocs = unitsSnap.docs.slice().sort((a, b) => (b.data().createdAt?.seconds || 0) - (a.data().createdAt?.seconds || 0));
+    unitDocs.forEach(d => {
       const u = d.data();
       const isActive = !!u.unitManagerId;
       const status = isActive
