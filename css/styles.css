@@ -226,6 +226,21 @@ textarea { resize: vertical; min-height: 70px; }
 }
 .sidebar-name { font-weight: 600; margin-bottom: 24px; font-size: 14px; }
 
+/* Hamburger toggle — desktop keeps the nav always visible, so this stays
+   hidden until the mobile breakpoint below turns it on. */
+.sidebar-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--white);
+  font-size: 20px;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.sidebar-toggle:hover { background: rgba(255,255,255,0.08); }
+
 .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .sidebar-nav a, .sidebar-nav button {
   display: block;
@@ -390,25 +405,37 @@ tr.clickable:hover { background: var(--red-tint); }
   .sidebar {
     width: 100%;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     padding: 12px 14px;
     gap: 14px;
-    overflow-x: auto;
+    overflow-x: visible;
     -webkit-overflow-scrolling: touch;
   }
   .sidebar-brand { margin-bottom: 0; flex-shrink: 0; }
   .sidebar-name, .sidebar-role { display: none; }
 
-  /* Nav becomes a horizontally-scrolling pill row instead of disappearing —
-     this is what carries the FA's tabs and the Sold/Lost buttons on RC/RH,
-     so it must stay reachable on mobile, not just be hidden. */
+  /* Hamburger becomes visible; the nav row it controls is hidden until tapped. */
+  .sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* Closed by default on mobile — tapping the hamburger adds .nav-open,
+     which reveals the same horizontally-scrolling pill row as before. */
   .sidebar-nav {
+    display: none;
     flex-direction: row;
     flex: 0 1 auto;
     gap: 4px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+  }
+  .sidebar-nav.nav-open {
+    display: flex;
+    flex-basis: 100%;
+    order: 3;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.12);
   }
   .sidebar-nav::-webkit-scrollbar { display: none; }
   .sidebar-nav a, .sidebar-nav button {
