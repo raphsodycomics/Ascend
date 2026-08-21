@@ -16,6 +16,8 @@ import {
 
 export const ROLE_HOME = {
   admin: "admin.html",
+  regional_head: "regional-head.html",
+  regional_coordinator: "regional-coordinator.html",
   line_manager: "line-manager.html",
   unit_manager: "unit-manager.html",
   fa: "fa.html"
@@ -42,9 +44,9 @@ export function guardPage(allowedRoles, onReady) {
     const profile = { uid: user.uid, ...snap.data() };
 
     // Blocked statuses: suspended/deactivated are the manual states set
-    // via "Manage" on the FA/Unit Manager dashboards; archived is the
-    // same lockout, used when someone loses access to their device and
-    // shouldn't be able to sign back in until reactivated.
+    // via "Manage" on the dashboards; archived is the same lockout, used
+    // when someone loses access to their device and shouldn't be able to
+    // sign back in until reactivated.
     if (profile.status === "suspended" || profile.status === "deactivated" || profile.status === "archived") {
       alert("Your account is " + profile.status + ". Contact your manager or admin.");
       await signOut(auth);
@@ -68,7 +70,9 @@ export function roleHome(role) {
 export function roleLabel(role) {
   return {
     admin: "System Administrator",
-    line_manager: "Line Manager",
+    regional_head: "Regional Head",
+    regional_coordinator: "Regional Coordinator",
+    line_manager: "Area Manager",
     unit_manager: "Unit Manager",
     fa: "Financial Advisor"
   }[role] || role;
