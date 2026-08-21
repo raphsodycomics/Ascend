@@ -33,6 +33,7 @@
     </div>
     <div class="sidebar-role">Area Manager</div>
     <div class="sidebar-name" id="userName">—</div>
+    <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu">☰</button>
     <nav class="sidebar-nav">
       <a href="#" class="active">Overview</a>
       <button type="button" id="viewSoldBtn">Sold</button>
@@ -195,6 +196,14 @@
   });
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
+
+  // Mobile hamburger: nav is hidden by default under 800px, toggled open here.
+  document.getElementById("sidebarToggle").addEventListener("click", () => {
+    document.querySelector(".sidebar-nav").classList.toggle("nav-open");
+  });
+  document.querySelectorAll(".sidebar-nav a, .sidebar-nav button").forEach((el) => {
+    el.addEventListener("click", () => document.querySelector(".sidebar-nav").classList.remove("nav-open"));
+  });
 
   // Backward-compatible with any old records, same helper used on fa.html
   // and unit-manager.html: outcome is the real field ("active"/"sold"/"lost"),
