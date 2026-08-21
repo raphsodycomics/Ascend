@@ -83,6 +83,84 @@ export async function logout() {
   window.location.href = "index.html";
 }
 
+// ============================================================
+// Inactivity timeout — for roles handling sensitive client data.
+// After INACTIVITY_LIMIT_MS with no keyboard/mouse/touch/scroll
+// activity, an on-screen countdown appears. If it reaches zero
+// with still no activity, the user is signed out and sent back
+// to the login page, matching a standard session-safety pattern.
+// Call startInactivityTimer() once, from inside guardPage's
+// onReady callback, on any page that should enforce this.
+// ============================================================
+const INACTIVITY_LIMIT_MS = 5 * 60 * 1000; // 5 minutes
+const COUNTDOWN_SECONDS = 50;
+const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+
+export function startInactivityTimer() {
+  let idleTimer = null;
+  let countdownTimer = null;
+  let secondsLeft = COUNTDOWN_SECONDS;
+  let overlay = null;
+
+  function buildOverlay() {
+    if (overlay) return overlay;
+    overlay = document.createElement("div");
+    overlay.id = "inactivityOverlay";
+    overlay.className = "modal-overlay";
+    overlay.style.zIndex = "999";
+    overlay.innerHTML = `
+      <div class="modal-box" style="max-width:360px;text-align:center;">
+        <h3>Still there?</h3>
+        <p style="margin-bottom:18px;">For your security, you'll be signed out in
+          <b id="inactivityCountdown">${COUNTDOWN_SECONDS}</b> seconds due to inactivity.</p>
+        <button type="button" class="btn btn-primary" id="inactivityStayBtn">Stay signed in</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    // Any click inside the warning itself also counts as activity, but the
+    // button is the explicit, obvious way out — wired separately so it
+    // still works even if a page-level click handler stops propagation.
+    overlay.querySelector("#inactivityStayBtn").addEventListener("click", resetIdleTimer);
+    return overlay;
+  }
+
+  function showWarning() {
+    buildOverlay();
+    secondsLeft = COUNTDOWN_SECONDS;
+    overlay.querySelector("#inactivityCountdown").textContent = secondsLeft;
+    overlay.classList.add("open");
+    countdownTimer = setInterval(() => {
+      secondsLeft -= 1;
+      const el = overlay.querySelector("#inactivityCountdown");
+      if (el) el.textContent = secondsLeft;
+      if (secondsLeft <= 0) {
+        clearInterval(countdownTimer);
+        signOutForInactivity();
+      }
+    }, 1000);
+  }
+
+  function hideWarning() {
+    if (overlay) overlay.classList.remove("open");
+    if (countdownTimer) clearInterval(countdownTimer);
+  }
+
+  async function signOutForInactivity() {
+    hideWarning();
+    ACTIVITY_EVENTS.forEach(evt => document.removeEventListener(evt, resetIdleTimer));
+    try { await signOut(auth); } catch (_) { /* already signed out is fine */ }
+    window.location.href = "index.html?timeout=1";
+  }
+
+  function resetIdleTimer() {
+    hideWarning();
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(showWarning, INACTIVITY_LIMIT_MS);
+  }
+
+  ACTIVITY_EVENTS.forEach(evt => document.addEventListener(evt, resetIdleTimer, { passive: true }));
+  resetIdleTimer();
+}
+
 export function genToken(len = 28) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   let out = "";
