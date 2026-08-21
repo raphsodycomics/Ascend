@@ -28,31 +28,31 @@
   <main class="main">
     <div class="main-header">
       <h1>Organisation overview</h1>
-      <p>Create Lines and invite the first Line Manager for each. Everything below flows from these invitations.</p>
+      <p>Create Regions and invite the first Regional Head for each. Everything below flows from these invitations.</p>
     </div>
 
     <div class="stat-grid">
-      <div class="stat-card"><div class="stat-label">Lines</div><div class="stat-value" id="statLines">–</div></div>
-      <div class="stat-card"><div class="stat-label">Unit Managers</div><div class="stat-value" id="statUMs">–</div></div>
-      <div class="stat-card"><div class="stat-label">Financial Advisors</div><div class="stat-value" id="statFAs">–</div></div>
+      <div class="stat-card"><div class="stat-label">Regions</div><div class="stat-value" id="statRegions">–</div></div>
+      <div class="stat-card"><div class="stat-label">Regional Coordinators</div><div class="stat-value" id="statRCs">–</div></div>
+      <div class="stat-card"><div class="stat-label">Area Managers</div><div class="stat-value" id="statAMs">–</div></div>
       <div class="stat-card accent"><div class="stat-label">Pending invitations</div><div class="stat-value" id="statPending">–</div></div>
     </div>
 
     <div class="card">
-      <div class="card-header"><h3>Invite a Line Manager</h3></div>
-      <p style="margin-bottom:16px;">This creates a new Line and sends its first Line Manager an activation link. They'll invite their own Unit Managers once active.</p>
+      <div class="card-header"><h3>Invite a Regional Head</h3></div>
+      <p style="margin-bottom:16px;">This creates a new Region and sends its first Regional Head an activation link. They'll invite their own Regional Coordinators once active.</p>
       <div id="inviteMsg" class="form-msg"></div>
       <form id="inviteForm">
-        <label for="lineName">Line name</label>
-        <input type="text" id="lineName" placeholder="e.g. Lagos Line 1" required>
+        <label for="regionName">Region name</label>
+        <input type="text" id="regionName" placeholder="e.g. South West Region" required>
         <div class="field-row">
           <div>
-            <label for="lmName">Line Manager full name</label>
-            <input type="text" id="lmName" required>
+            <label for="rhName">Regional Head full name</label>
+            <input type="text" id="rhName" required>
           </div>
           <div>
-            <label for="lmEmail">Line Manager email</label>
-            <input type="email" id="lmEmail" required>
+            <label for="rhEmail">Regional Head email</label>
+            <input type="email" id="rhEmail" required>
           </div>
         </div>
         <button type="submit" class="btn btn-primary" id="inviteBtn">Generate invitation</button>
@@ -67,8 +67,8 @@
     </div>
 
     <div class="card">
-      <div class="card-header"><h3>Lines</h3></div>
-      <div id="linesTableWrap"><div class="loading-line">Loading…</div></div>
+      <div class="card-header"><h3>Regions</h3></div>
+      <div id="regionsTableWrap"><div class="loading-line">Loading…</div></div>
     </div>
 
     <div class="card">
@@ -96,67 +96,68 @@
   document.getElementById("logoutBtn").addEventListener("click", logout);
 
   async function loadOverview() {
-    const [linesSnap, umSnap, faSnap, pendingSnap] = await Promise.all([
-      getDocs(query(collection(db, "lines"), orderBy("createdAt", "desc"))),
-      getDocs(query(collection(db, "users"), where("role", "==", "unit_manager"))),
-      getDocs(query(collection(db, "users"), where("role", "==", "fa"))),
+    const [regionsSnap, rcSnap, amSnap, pendingSnap] = await Promise.all([
+      getDocs(query(collection(db, "regions"), orderBy("createdAt", "desc"))),
+      getDocs(query(collection(db, "users"), where("role", "==", "regional_coordinator"))),
+      getDocs(query(collection(db, "users"), where("role", "==", "line_manager"))),
       getDocs(query(collection(db, "invitations"), where("used", "==", false)))
     ]);
 
-    document.getElementById("statLines").textContent = linesSnap.size;
-    document.getElementById("statUMs").textContent = umSnap.size;
-    document.getElementById("statFAs").textContent = faSnap.size;
+    document.getElementById("statRegions").textContent = regionsSnap.size;
+    document.getElementById("statRCs").textContent = rcSnap.size;
+    document.getElementById("statAMs").textContent = amSnap.size;
     document.getElementById("statPending").textContent = pendingSnap.size;
 
-    renderLines(linesSnap);
+    renderRegions(regionsSnap);
     renderPending(pendingSnap);
   }
 
-  function renderLines(snap) {
-    const wrap = document.getElementById("linesTableWrap");
-    if (snap.empty) { wrap.innerHTML = '<div class="empty-state">No Lines created yet. Invite your first Line Manager above.</div>'; return; }
+  function renderRegions(snap) {
+    const wrap = document.getElementById("regionsTableWrap");
+    if (snap.empty) { wrap.innerHTML = '<div class="empty-state">No Regions created yet. Invite your first Regional Head above.</div>'; return; }
 
     let rows = "";
     snap.forEach(d => {
-      const l = d.data();
-      const isActive = !!l.lineManagerId;
+      const r = d.data();
+      const isActive = !!r.regionalHeadId;
       const status = isActive
         ? '<span class="badge green"><span class="badge-dot"></span>Active</span>'
         : '<span class="badge amber"><span class="badge-dot"></span>Invited</span>';
-      // Only a Line still waiting on its first Line Manager to accept can
+      // Only a Region still waiting on its first Regional Head to accept can
       // be deleted — once active, deleting it would orphan a real manager
-      // and their whole Unit/FA tree, so no delete button is shown at all.
+      // and their whole Coordination/Line/Unit/FA tree, so no delete button
+      // is shown at all.
       const deleteBtn = isActive
         ? ""
-        : `<button class="btn btn-ghost btn-sm delete-line" data-line="${d.id}" data-name="${escapeHtml(l.name)}" style="color:var(--red);">Delete</button>`;
+        : `<button class="btn btn-ghost btn-sm delete-region" data-region="${d.id}" data-name="${escapeHtml(r.name)}" style="color:var(--red);">Delete</button>`;
       rows += `<tr>
-        <td><b>${escapeHtml(l.name)}</b></td>
+        <td><b>${escapeHtml(r.name)}</b></td>
         <td>${status}</td>
-        <td>${fmtDate(l.createdAt)}</td>
+        <td>${fmtDate(r.createdAt)}</td>
         <td>${deleteBtn}</td>
       </tr>`;
     });
-    wrap.innerHTML = `<table><thead><tr><th>Line</th><th>Line Manager status</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrap.innerHTML = `<table><thead><tr><th>Region</th><th>Regional Head status</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 
-    wrap.querySelectorAll(".delete-line").forEach(btn => {
-      btn.addEventListener("click", () => deleteLine(btn.dataset.line, btn.dataset.name, btn));
+    wrap.querySelectorAll(".delete-region").forEach(btn => {
+      btn.addEventListener("click", () => deleteRegion(btn.dataset.region, btn.dataset.name, btn));
     });
   }
 
-  async function deleteLine(lineId, lineName, btn) {
-    if (!confirm(`Delete "${lineName}"? This also cancels its pending Line Manager invitation. This cannot be undone.`)) return;
+  async function deleteRegion(regionId, regionName, btn) {
+    if (!confirm(`Delete "${regionName}"? This also cancels its pending Regional Head invitation. This cannot be undone.`)) return;
     btn.disabled = true; btn.textContent = "Deleting…";
     try {
-      // The invite generated when this Line was created is now orphaned —
+      // The invite generated when this Region was created is now orphaned —
       // remove it too so the link stops working immediately.
-      const invSnap = await getDocs(query(collection(db, "invitations"), where("lineId", "==", lineId), where("used", "==", false)));
+      const invSnap = await getDocs(query(collection(db, "invitations"), where("regionId", "==", regionId), where("used", "==", false)));
       await Promise.all(invSnap.docs.map(d => deleteDoc(doc(db, "invitations", d.id))));
 
-      await deleteDoc(doc(db, "lines", lineId));
+      await deleteDoc(doc(db, "regions", regionId));
       loadOverview();
     } catch (err) {
       console.error(err);
-      alert("Couldn't delete this Line (" + (err.code || err.message) + "). If this keeps happening, the Firestore rules may need updating to allow it.");
+      alert("Couldn't delete this Region (" + (err.code || err.message) + "). If this keeps happening, the Firestore rules may need updating to allow it.");
       btn.disabled = false; btn.textContent = "Delete";
     }
   }
@@ -215,14 +216,14 @@
     const btn = document.getElementById("inviteBtn");
     btn.disabled = true; btn.textContent = "Generating…";
 
-    const lineName = document.getElementById("lineName").value.trim();
-    const lmName = document.getElementById("lmName").value.trim();
-    const lmEmail = document.getElementById("lmEmail").value.trim().toLowerCase();
+    const regionName = document.getElementById("regionName").value.trim();
+    const rhName = document.getElementById("rhName").value.trim();
+    const rhEmail = document.getElementById("rhEmail").value.trim().toLowerCase();
 
     try {
       // Duplicate check: existing active user with this email, or an unused invite already out.
-      const dupUser = await getDocs(query(collection(db, "users"), where("email", "==", lmEmail)));
-      const dupInvite = await getDocs(query(collection(db, "invitations"), where("email", "==", lmEmail), where("used", "==", false)));
+      const dupUser = await getDocs(query(collection(db, "users"), where("email", "==", rhEmail)));
+      const dupInvite = await getDocs(query(collection(db, "invitations"), where("email", "==", rhEmail), where("used", "==", false)));
       if (!dupUser.empty || !dupInvite.empty) {
         msg.textContent = "An account or pending invitation already exists using this email.";
         msg.className = "form-msg error";
@@ -230,9 +231,9 @@
         return;
       }
 
-      const lineRef = await addDoc(collection(db, "lines"), {
-        name: lineName,
-        lineManagerId: null,
+      const regionRef = await addDoc(collection(db, "regions"), {
+        name: regionName,
+        regionalHeadId: null,
         createdBy: me.uid,
         createdAt: serverTimestamp()
       });
@@ -241,10 +242,10 @@
       const expires = Timestamp.fromDate(new Date(Date.now() + 3 * 60 * 60 * 1000));
       await setDoc(doc(db, "invitations", token), {
         token,
-        name: lmName,
-        email: lmEmail,
-        role: "line_manager",
-        lineId: lineRef.id,
+        name: rhName,
+        email: rhEmail,
+        role: "regional_head",
+        regionId: regionRef.id,
         invitedByUid: me.uid,
         invitedByName: me.name,
         used: false,
@@ -253,7 +254,7 @@
       });
 
       const link = inviteUrl(token);
-      document.getElementById("linkName").textContent = lmName;
+      document.getElementById("linkName").textContent = rhName;
       document.getElementById("linkBox").textContent = link;
       document.getElementById("linkCard").style.display = "block";
       document.getElementById("copyLinkBtn").onclick = () => {
