@@ -1,285 +1,507 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin — ASCEND</title>
-<link rel="stylesheet" href="css/styles.css">
-  <link rel="icon" type="image/png" href="logo.png">
-</head>
-<body>
+/* ============================================================
+   ASCEND by Heirs Life — Design Tokens & Shared Styles
+   ============================================================ */
 
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="sidebar-brand">
-      <span class="ascend-mark"><img src="logo.png" alt="ASCEND logo"></span>
-      <div class="sidebar-brand-text"><b>ASCEND</b><span>HEIRS LIFE</span></div>
-    </div>
-    <div class="sidebar-role">System Administrator</div>
-    <div class="sidebar-name" id="userName">—</div>
-    <nav class="sidebar-nav">
-      <a href="#" class="active">Overview</a>
-    </nav>
-    <div class="sidebar-logout">
-      <button id="logoutBtn">Log out</button>
-    </div>
-  </aside>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
-  <main class="main">
-    <div class="main-header">
-      <h1>Organisation overview</h1>
-      <p>Create Regions and invite the first Regional Head for each. Everything below flows from these invitations.</p>
-    </div>
+:root {
+  --red: #D91E36;
+  --red-deep: #9E1526;
+  --white: #FFFFFF;
+  --ink: #1A1A1A;
+  --muted: #5C5C5C;
+  --hairline: #E3D9DA;
+  --red-tint: #FCEBEC;
+  --green: #1E8E5A;
+  --green-tint: #E7F6EE;
+  --amber: #B8790A;
+  --amber-tint: #FBF1DF;
 
-    <div class="stat-grid">
-      <div class="stat-card"><div class="stat-label">Regions</div><div class="stat-value" id="statRegions">–</div></div>
-      <div class="stat-card"><div class="stat-label">Regional Coordinators</div><div class="stat-value" id="statRCs">–</div></div>
-      <div class="stat-card"><div class="stat-label">Area Managers</div><div class="stat-value" id="statAMs">–</div></div>
-      <div class="stat-card"><div class="stat-label">Unit Managers</div><div class="stat-value" id="statUMs">–</div></div>
-      <div class="stat-card"><div class="stat-label">Financial Advisors</div><div class="stat-value" id="statFAs">–</div></div>
-      <div class="stat-card accent"><div class="stat-label">Pending invitations</div><div class="stat-value" id="statPending">–</div></div>
-    </div>
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
-    <div class="card">
-      <div class="card-header"><h3>Invite a Regional Head</h3></div>
-      <p style="margin-bottom:16px;">This creates a new Region and sends its first Regional Head an activation link. They'll invite their own Regional Coordinators once active.</p>
-      <div id="inviteMsg" class="form-msg"></div>
-      <form id="inviteForm">
-        <label for="regionName">Region name</label>
-        <input type="text" id="regionName" placeholder="e.g. South West Region" required>
-        <div class="field-row">
-          <div>
-            <label for="rhName">Regional Head full name</label>
-            <input type="text" id="rhName" required>
-          </div>
-          <div>
-            <label for="rhEmail">Regional Head email</label>
-            <input type="email" id="rhEmail" required>
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary" id="inviteBtn">Generate invitation</button>
-      </form>
-    </div>
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow-card: 0 1px 2px rgba(26,26,26,0.04), 0 8px 24px rgba(26,26,26,0.06);
+}
 
-    <div class="card" id="linkCard" style="display:none;">
-      <div class="card-header"><h3>Invitation ready</h3></div>
-      <p>Send this link to <b id="linkName"></b> directly (WhatsApp, email, etc). It expires in 3 hours and works once.</p>
-      <div class="link-box" id="linkBox"></div>
-      <button class="btn btn-secondary btn-sm" id="copyLinkBtn">Copy link</button>
-    </div>
+* { box-sizing: border-box; }
 
-    <div class="card">
-      <div class="card-header"><h3>Regions</h3></div>
-      <div id="regionsTableWrap"><div class="loading-line">Loading…</div></div>
-    </div>
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--white);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
 
-    <div class="card">
-      <div class="card-header"><h3>Pending invitations</h3></div>
-      <div id="pendingTableWrap"><div class="loading-line">Loading…</div></div>
-    </div>
-  </main>
-</div>
+body { min-height: 100vh; }
 
-<script type="module">
-  import { db } from "./js/firebase-config.js";
-  import {
-    collection, addDoc, doc, setDoc, getDocs, deleteDoc, query, where, serverTimestamp, Timestamp, orderBy
-  } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
-  import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate } from "./js/auth.js";
+a { color: var(--red); }
 
-  let me = null;
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.01em;
+}
 
-  guardPage(["admin"], (profile) => {
-    me = profile;
-    document.getElementById("userName").textContent = profile.name;
-    loadOverview();
-  });
+p { margin: 0 0 8px 0; color: var(--muted); }
 
-  document.getElementById("logoutBtn").addEventListener("click", logout);
+/* ---------- ASCEND mark: a red globe with white meridian lines ---------- */
+.ascend-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--white);
+  flex-shrink: 0;
+}
+.ascend-mark svg { width: 26px; height: 26px; }
+.ascend-mark img { width: 26px; height: 26px; object-fit: contain; display: block; }
+.ascend-mark.lg { width: 64px; height: 64px; }
+.ascend-mark.lg svg { width: 38px; height: 38px; }
+.ascend-mark.lg img { width: 38px; height: 38px; object-fit: contain; }
 
-  async function loadOverview() {
-    const [regionsSnap, rcSnap, amSnap, umSnap, faSnap, pendingSnap] = await Promise.all([
-      getDocs(query(collection(db, "regions"), orderBy("createdAt", "desc"))),
-      getDocs(query(collection(db, "users"), where("role", "==", "regional_coordinator"))),
-      getDocs(query(collection(db, "users"), where("role", "==", "line_manager"))),
-      getDocs(query(collection(db, "users"), where("role", "==", "unit_manager"))),
-      getDocs(query(collection(db, "users"), where("role", "==", "fa"))),
-      getDocs(query(collection(db, "invitations"), where("used", "==", false)))
-    ]);
+.wordmark-block { text-align: center; }
+.wordmark-heirs {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--red);
+  font-size: 13px;
+  margin-top: 14px;
+}
+.wordmark-ascend {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 20px;
+  margin-top: 2px;
+}
+.wordmark-tag {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
 
-    document.getElementById("statRegions").textContent = regionsSnap.size;
-    document.getElementById("statRCs").textContent = rcSnap.size;
-    document.getElementById("statAMs").textContent = amSnap.size;
-    document.getElementById("statUMs").textContent = umSnap.size;
-    document.getElementById("statFAs").textContent = faSnap.size;
-    document.getElementById("statPending").textContent = pendingSnap.size;
+/* ---------- Auth screens ---------- */
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  margin-top: 28px;
+  box-shadow: var(--shadow-card);
+}
+.auth-footnote {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 22px;
+  max-width: 320px;
+  line-height: 1.5;
+}
+.auth-trouble {
+  display: block;
+  text-align: center;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+.auth-trouble:hover { color: var(--red); }
 
-    renderRegions(regionsSnap);
-    renderPending(pendingSnap);
+/* ---------- Form elements ---------- */
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="tel"],
+input[type="date"],
+input[type="time"],
+input[type="number"],
+textarea,
+select {
+  width: 100%;
+  padding: 11px 12px;
+  font-size: 15px;
+  font-family: var(--font-body);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--ink);
+  margin-bottom: 16px;
+  transition: border-color 0.15s ease;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--red);
+}
+textarea { resize: vertical; min-height: 70px; }
+
+.field-row { display: flex; gap: 10px; }
+.field-row > div { flex: 1; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+.btn-primary { background: var(--red); color: var(--white); }
+.btn-primary:hover { background: var(--red-deep); }
+.btn-primary:active { transform: scale(0.99); }
+.btn-primary:disabled { background: var(--hairline); color: var(--muted); cursor: not-allowed; }
+.btn-secondary { background: var(--red-tint); color: var(--red-deep); }
+.btn-secondary:hover { background: #f8dade; }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--hairline); }
+.btn-ghost:hover { border-color: var(--red); color: var(--red); }
+.btn-sm { width: auto; padding: 8px 14px; font-size: 13px; }
+
+.form-msg {
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  display: none;
+}
+.form-msg.error { display: block; background: var(--red-tint); color: var(--red-deep); }
+.form-msg.success { display: block; background: var(--green-tint); color: var(--green); }
+
+/* ---------- App shell (post-login) ---------- */
+.app-shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--ink);
+  color: var(--white);
+  padding: 24px 18px;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 30px; }
+.sidebar-brand .ascend-mark { width: 34px; height: 34px; }
+.sidebar-brand .ascend-mark svg { width: 20px; height: 20px; }
+.sidebar-brand .ascend-mark img { width: 20px; height: 20px; object-fit: contain; }
+.sidebar-brand-text { line-height: 1.2; }
+.sidebar-brand-text b { font-family: var(--font-display); font-size: 15px; }
+.sidebar-brand-text span { display: block; font-size: 11px; color: #A8A8A8; letter-spacing: 0.06em; }
+
+.sidebar-role {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #A8A8A8;
+  margin-bottom: 4px;
+}
+.sidebar-name { font-weight: 600; margin-bottom: 24px; font-size: 14px; }
+
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.sidebar-nav a, .sidebar-nav button {
+  display: block;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #D8D8D8;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.sidebar-nav a.active, .sidebar-nav button.active, .sidebar-nav a:hover, .sidebar-nav button:hover { background: rgba(255,255,255,0.08); color: var(--white); }
+
+.sidebar-logout { border-top: 1px solid rgba(255,255,255,0.12); padding-top: 14px; margin-top: 14px; }
+
+.main {
+  flex: 1;
+  padding: 32px 40px;
+  max-width: 1100px;
+}
+.main-header { margin-bottom: 28px; }
+.main-header h1 { font-size: 24px; }
+
+/* ---------- Cards & stats ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 30px;
+}
+.stat-card {
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.stat-card .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.stat-card .stat-value { font-family: var(--font-display); font-size: 30px; font-weight: 600; color: var(--ink); }
+.stat-card.accent .stat-value { color: var(--red); }
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 22px;
+  margin-bottom: 24px;
+}
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.card-header h3 { font-size: 16px; }
+
+/* ---------- Table ---------- */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+td { padding: 12px; border-bottom: 1px solid var(--hairline); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover { background: var(--red-tint); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+.badge-dot { width: 7px; height: 7px; border-radius: 50%; }
+.badge.green { background: var(--green-tint); color: var(--green); }
+.badge.green .badge-dot { background: var(--green); }
+.badge.red { background: var(--red-tint); color: var(--red-deep); }
+.badge.red .badge-dot { background: var(--red); }
+.badge.amber { background: var(--amber-tint); color: var(--amber); }
+.badge.amber .badge-dot { background: var(--amber); }
+.badge.grey { background: #EFEFEF; color: var(--muted); }
+.badge.grey .badge-dot { background: var(--muted); }
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(26,26,26,0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 26px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-box h3 { margin-bottom: 18px; }
+
+.link-box {
+  background: var(--red-tint);
+  border: 1px dashed var(--red);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--red-deep);
+  margin-bottom: 12px;
+}
+
+.pill-tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+.pill-tabs button {
+  border: 1px solid var(--hairline);
+  background: var(--white);
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--muted);
+}
+.pill-tabs button.active { background: var(--ink); color: var(--white); border-color: var(--ink); }
+
+.loading-line { color: var(--muted); font-size: 14px; padding: 20px 0; }
+
+/* ============================================================
+   Responsive: tablet (≤1024px) and mobile (≤800px / ≤480px)
+   ============================================================ */
+
+/* ---------- Tablet: tighten spacing, keep the sidebar as a sidebar ---------- */
+@media (max-width: 1024px) {
+  .sidebar { width: 200px; padding: 20px 14px; }
+  .main { padding: 24px 22px; max-width: 100%; }
+  .stat-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .stat-card { padding: 14px; }
+  .stat-card .stat-value { font-size: 24px; }
+  .card { padding: 18px; }
+  .modal-box { max-width: 90vw; }
+}
+
+/* ---------- Mobile: sidebar becomes a scrollable top bar ---------- */
+@media (max-width: 800px) {
+  .app-shell { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    padding: 12px 14px;
+    gap: 14px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sidebar-brand { margin-bottom: 0; flex-shrink: 0; }
+  .sidebar-name, .sidebar-role { display: none; }
+
+  /* Nav becomes a horizontally-scrolling pill row instead of disappearing —
+     this is what carries the FA's tabs and the Sold/Lost buttons on RC/RH,
+     so it must stay reachable on mobile, not just be hidden. */
+  .sidebar-nav {
+    flex-direction: row;
+    flex: 0 1 auto;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .sidebar-nav::-webkit-scrollbar { display: none; }
+  .sidebar-nav a, .sidebar-nav button {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 8px 10px;
+    font-size: 13px;
   }
 
-  function renderRegions(snap) {
-    const wrap = document.getElementById("regionsTableWrap");
-    if (snap.empty) { wrap.innerHTML = '<div class="empty-state">No Regions created yet. Invite your first Regional Head above.</div>'; return; }
+  .sidebar-logout { border-top: none; padding-top: 0; margin-top: 0; flex-shrink: 0; margin-left: auto; }
+  .sidebar-logout button { padding: 8px 10px; font-size: 13px; }
 
-    let rows = "";
-    snap.forEach(d => {
-      const r = d.data();
-      const isActive = !!r.regionalHeadId;
-      const status = isActive
-        ? '<span class="badge green"><span class="badge-dot"></span>Active</span>'
-        : '<span class="badge amber"><span class="badge-dot"></span>Invited</span>';
-      // Only a Region still waiting on its first Regional Head to accept can
-      // be deleted — once active, deleting it would orphan a real manager
-      // and their whole Coordination/Line/Unit/FA tree, so no delete button
-      // is shown at all.
-      const deleteBtn = isActive
-        ? ""
-        : `<button class="btn btn-ghost btn-sm delete-region" data-region="${d.id}" data-name="${escapeHtml(r.name)}" style="color:var(--red);">Delete</button>`;
-      rows += `<tr>
-        <td><b>${escapeHtml(r.name)}</b></td>
-        <td>${status}</td>
-        <td>${fmtDate(r.createdAt)}</td>
-        <td>${deleteBtn}</td>
-      </tr>`;
-    });
-    wrap.innerHTML = `<table><thead><tr><th>Region</th><th>Regional Head status</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  .main { padding: 18px 16px; }
+  .main-header h1 { font-size: 20px; }
 
-    wrap.querySelectorAll(".delete-region").forEach(btn => {
-      btn.addEventListener("click", () => deleteRegion(btn.dataset.region, btn.dataset.name, btn));
-    });
-  }
+  .field-row { flex-direction: column; gap: 0; }
 
-  async function deleteRegion(regionId, regionName, btn) {
-    if (!confirm(`Delete "${regionName}"? This also cancels its pending Regional Head invitation. This cannot be undone.`)) return;
-    btn.disabled = true; btn.textContent = "Deleting…";
-    try {
-      // The invite generated when this Region was created is now orphaned —
-      // remove it too so the link stops working immediately.
-      const invSnap = await getDocs(query(collection(db, "invitations"), where("regionId", "==", regionId), where("used", "==", false)));
-      await Promise.all(invSnap.docs.map(d => deleteDoc(doc(db, "invitations", d.id))));
+  /* iOS Safari auto-zooms on inputs under 16px — bump up just on mobile. */
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="tel"], input[type="date"], input[type="time"],
+  input[type="number"], textarea, select { font-size: 16px; }
 
-      await deleteDoc(doc(db, "regions", regionId));
-      loadOverview();
-    } catch (err) {
-      console.error(err);
-      alert("Couldn't delete this Region (" + (err.code || err.message) + "). If this keeps happening, the Firestore rules may need updating to allow it.");
-      btn.disabled = false; btn.textContent = "Delete";
-    }
-  }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 
-  function renderPending(snap) {
-    const wrap = document.getElementById("pendingTableWrap");
-    const rows = [];
-    snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
-    rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  .card { padding: 16px; margin-bottom: 18px; }
+  .card-header { flex-wrap: wrap; gap: 8px; }
 
-    if (rows.length === 0) { wrap.innerHTML = '<div class="empty-state">No pending invitations.</div>'; return; }
+  /* Tables overflow their card instead of squeezing/breaking the layout. */
+  table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  th, td { padding: 10px; }
 
-    let html = "";
-    rows.forEach(inv => {
-      html += `<tr>
-        <td><b>${escapeHtml(inv.name)}</b><br><span style="color:var(--muted);font-size:12px;">${escapeHtml(inv.email)}</span></td>
-        <td>${escapeHtml(inv.role.replace('_',' '))}</td>
-        <td>${fmtDate(inv.createdAt)}</td>
-        <td>
-          <button class="btn btn-ghost btn-sm copy-pending" data-token="${inv.id}">Copy link</button>
-          <button class="btn btn-ghost btn-sm cancel-pending" data-token="${inv.id}" style="color:var(--red);margin-left:6px;">Cancel</button>
-        </td>
-      </tr>`;
-    });
-    wrap.innerHTML = `<table><thead><tr><th>Invitee</th><th>Role</th><th>Sent</th><th></th></tr></thead><tbody>${html}</tbody></table>`;
+  .modal-box { padding: 20px; max-width: 94vw; }
 
-    wrap.querySelectorAll(".copy-pending").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const link = inviteUrl(btn.dataset.token);
-        copyText(link);
-        btn.textContent = "Copied!";
-        setTimeout(() => btn.textContent = "Copy link", 1500);
-      });
-    });
+  .counter-row { flex-wrap: wrap; }
+  .modal-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
 
-    wrap.querySelectorAll(".cancel-pending").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        if (!confirm("Cancel this invitation? The link will stop working immediately.")) return;
-        btn.disabled = true; btn.textContent = "Cancelling…";
-        try {
-          await deleteDoc(doc(db, "invitations", btn.dataset.token));
-          loadOverview();
-        } catch (err) {
-          console.error(err);
-          alert("Couldn't cancel this invitation (" + (err.code || err.message) + ").");
-          btn.disabled = false; btn.textContent = "Cancel";
-        }
-      });
-    });
-  }
+  .btn-sm { width: auto; }
+}
 
-  document.getElementById("inviteForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const msg = document.getElementById("inviteMsg");
-    msg.className = "form-msg";
-    const btn = document.getElementById("inviteBtn");
-    btn.disabled = true; btn.textContent = "Generating…";
+/* ---------- Small phones ---------- */
+@media (max-width: 480px) {
+  .stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-card { padding: 12px; }
+  .stat-card .stat-label { font-size: 11px; }
+  .stat-card .stat-value { font-size: 20px; }
+  .main { padding: 14px 12px; }
+  .card { padding: 14px; }
+  .modal-box { padding: 16px; }
+  .auth-card { padding: 22px 18px; }
+}
 
-    const regionName = document.getElementById("regionName").value.trim();
-    const rhName = document.getElementById("rhName").value.trim();
-    const rhEmail = document.getElementById("rhEmail").value.trim().toLowerCase();
+/* ---------- Prospect detail: outcome banner ---------- */
+.outcome-banner {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.outcome-banner.sold { background: var(--green-tint); color: var(--green); }
+.outcome-banner.lost { background: #EFEFEF; color: var(--muted); }
 
-    try {
-      // Duplicate check: existing active user with this email, or an unused invite already out.
-      const dupUser = await getDocs(query(collection(db, "users"), where("email", "==", rhEmail)));
-      const dupInvite = await getDocs(query(collection(db, "invitations"), where("email", "==", rhEmail), where("used", "==", false)));
-      if (!dupUser.empty || !dupInvite.empty) {
-        msg.textContent = "An account or pending invitation already exists using this email.";
-        msg.className = "form-msg error";
-        btn.disabled = false; btn.textContent = "Generate invitation";
-        return;
-      }
+/* ---------- Sold/Lost action buttons ---------- */
+.outcome-actions { display: flex; gap: 8px; margin: 16px 0 4px 0; }
+.outcome-actions .btn { width: auto; flex: 1; }
+.btn-sold { background: var(--green-tint); color: var(--green); }
+.btn-sold:hover { background: #d7f0e2; }
+.btn-lost { background: #EFEFEF; color: var(--muted); }
+.btn-lost:hover { background: #e2e2e2; }
 
-      const regionRef = await addDoc(collection(db, "regions"), {
-        name: regionName,
-        regionalHeadId: null,
-        createdBy: me.uid,
-        createdAt: serverTimestamp()
-      });
+/* ---------- Log timeline ---------- */
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 18px 0 8px 0;
+}
+.log-list { display: flex; flex-direction: column; gap: 10px; margin: 0 0 14px 0; max-height: 220px; overflow-y: auto; }
+.log-entry { background: var(--white); border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 10px 12px; }
+.log-entry-date { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.log-entry-text { font-size: 14px; color: var(--ink); white-space: pre-wrap; }
+.log-empty { color: var(--muted); font-size: 13px; padding: 4px 0 12px 0; }
 
-      const token = genToken();
-      const expires = Timestamp.fromDate(new Date(Date.now() + 3 * 60 * 60 * 1000));
-      await setDoc(doc(db, "invitations", token), {
-        token,
-        name: rhName,
-        email: rhEmail,
-        role: "regional_head",
-        regionId: regionRef.id,
-        invitedByUid: me.uid,
-        invitedByName: me.name,
-        used: false,
-        createdAt: serverTimestamp(),
-        expiresAt: expires
-      });
-
-      const link = inviteUrl(token);
-      document.getElementById("linkName").textContent = rhName;
-      document.getElementById("linkBox").textContent = link;
-      document.getElementById("linkCard").style.display = "block";
-      document.getElementById("copyLinkBtn").onclick = () => {
-        copyText(link);
-        document.getElementById("copyLinkBtn").textContent = "Copied!";
-        setTimeout(() => document.getElementById("copyLinkBtn").textContent = "Copy link", 1500);
-      };
-
-      e.target.reset();
-      msg.textContent = "Invitation generated.";
-      msg.className = "form-msg success";
-      loadOverview();
-    } catch (err) {
-      console.error(err);
-      msg.textContent = "Something went wrong. Please try again.";
-      msg.className = "form-msg error";
-    }
-    btn.disabled = false; btn.textContent = "Generate invitation";
-  });
-</script>
-</body>
-</html>
+/* ---------- Stacked modal (Mark Sold / Mark Lost mini-forms) ---------- */
+.mini-overlay {
+  position: fixed; inset: 0;
+  background: rgba(26,26,26,0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 20px;
+}
+.mini-overlay.open { display: flex; }
