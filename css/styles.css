@@ -369,13 +369,95 @@ tr.clickable:hover { background: var(--red-tint); }
 
 .loading-line { color: var(--muted); font-size: 14px; padding: 20px 0; }
 
+/* ============================================================
+   Responsive: tablet (≤1024px) and mobile (≤800px / ≤480px)
+   ============================================================ */
+
+/* ---------- Tablet: tighten spacing, keep the sidebar as a sidebar ---------- */
+@media (max-width: 1024px) {
+  .sidebar { width: 200px; padding: 20px 14px; }
+  .main { padding: 24px 22px; max-width: 100%; }
+  .stat-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .stat-card { padding: 14px; }
+  .stat-card .stat-value { font-size: 24px; }
+  .card { padding: 18px; }
+  .modal-box { max-width: 90vw; }
+}
+
+/* ---------- Mobile: sidebar becomes a scrollable top bar ---------- */
 @media (max-width: 800px) {
   .app-shell { flex-direction: column; }
-  .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 14px 18px; overflow-x: auto; }
-  .sidebar-brand { margin-bottom: 0; }
-  .sidebar-name, .sidebar-role, .sidebar-nav { display: none; }
-  .main { padding: 20px; }
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    padding: 12px 14px;
+    gap: 14px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sidebar-brand { margin-bottom: 0; flex-shrink: 0; }
+  .sidebar-name, .sidebar-role { display: none; }
+
+  /* Nav becomes a horizontally-scrolling pill row instead of disappearing —
+     this is what carries the FA's tabs and the Sold/Lost buttons on RC/RH,
+     so it must stay reachable on mobile, not just be hidden. */
+  .sidebar-nav {
+    flex-direction: row;
+    flex: 0 1 auto;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .sidebar-nav::-webkit-scrollbar { display: none; }
+  .sidebar-nav a, .sidebar-nav button {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .sidebar-logout { border-top: none; padding-top: 0; margin-top: 0; flex-shrink: 0; margin-left: auto; }
+  .sidebar-logout button { padding: 8px 10px; font-size: 13px; }
+
+  .main { padding: 18px 16px; }
+  .main-header h1 { font-size: 20px; }
+
   .field-row { flex-direction: column; gap: 0; }
+
+  /* iOS Safari auto-zooms on inputs under 16px — bump up just on mobile. */
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="tel"], input[type="date"], input[type="time"],
+  input[type="number"], textarea, select { font-size: 16px; }
+
+  .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+  .card { padding: 16px; margin-bottom: 18px; }
+  .card-header { flex-wrap: wrap; gap: 8px; }
+
+  /* Tables overflow their card instead of squeezing/breaking the layout. */
+  table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  th, td { padding: 10px; }
+
+  .modal-box { padding: 20px; max-width: 94vw; }
+
+  .counter-row { flex-wrap: wrap; }
+  .modal-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+
+  .btn-sm { width: auto; }
+}
+
+/* ---------- Small phones ---------- */
+@media (max-width: 480px) {
+  .stat-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-card { padding: 12px; }
+  .stat-card .stat-label { font-size: 11px; }
+  .stat-card .stat-value { font-size: 20px; }
+  .main { padding: 14px 12px; }
+  .card { padding: 14px; }
+  .modal-box { padding: 16px; }
+  .auth-card { padding: 22px 18px; }
 }
 
 /* ---------- Prospect detail: outcome banner ---------- */
