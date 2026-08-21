@@ -33,6 +33,7 @@
     </div>
     <div class="sidebar-role">Area Manager</div>
     <div class="sidebar-name" id="userName">—</div>
+    <div class="sidebar-meta" id="sidebarMeta"></div>
     <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu">☰</button>
     <nav class="sidebar-nav">
       <a href="#" class="active">Overview</a>
@@ -191,9 +192,22 @@
     document.getElementById("userName").textContent = profile.name;
     const lineSnap = await getDoc(doc(db, "lines", profile.lineId));
     if (lineSnap.exists()) document.getElementById("lineName").textContent = lineSnap.data().name;
+    loadHierarchyMeta();
     loadOverview();
     startInactivityTimer();
   });
+
+  // Show which Region this Area Manager sits under.
+  async function loadHierarchyMeta() {
+    try {
+      const regionSnap = me.regionId ? await getDoc(doc(db, "regions", me.regionId)) : null;
+      if (regionSnap && regionSnap.exists()) {
+        document.getElementById("sidebarMeta").textContent = "Region: " + regionSnap.data().name;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
 
