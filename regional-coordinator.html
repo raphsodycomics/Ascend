@@ -35,6 +35,7 @@
     </div>
     <div class="sidebar-role">Regional Coordinator</div>
     <div class="sidebar-name" id="userName">—</div>
+    <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle menu">☰</button>
     <nav class="sidebar-nav">
       <a href="#" class="active">Overview</a>
       <button type="button" id="viewSoldBtn">Sold</button>
@@ -214,6 +215,14 @@
   });
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
+
+  // Mobile hamburger: nav is hidden by default under 800px, toggled open here.
+  document.getElementById("sidebarToggle").addEventListener("click", () => {
+    document.querySelector(".sidebar-nav").classList.toggle("nav-open");
+  });
+  document.querySelectorAll(".sidebar-nav a, .sidebar-nav button").forEach((el) => {
+    el.addEventListener("click", () => document.querySelector(".sidebar-nav").classList.remove("nav-open"));
+  });
 
   function getOutcome(p) {
     if (p.outcome) return p.outcome;
