@@ -47,6 +47,13 @@
     </div>
 
     <div class="card">
+      <div class="card-header"><h3>Overview performance</h3></div>
+      <p style="margin-bottom:14px;color:var(--muted);font-size:13px;">Collated totals across your whole Region — no client detail.</p>
+      <button type="button" class="btn btn-secondary" id="viewSoldBtn">Sold</button>
+      <button type="button" class="btn btn-ghost" id="viewLostBtn" style="margin-left:10px;">Lost</button>
+    </div>
+
+    <div class="card">
       <div class="card-header"><h3>Invite a Regional Coordinator</h3></div>
       <p style="margin-bottom:16px;">This creates a new Coordination and invites its first Regional Coordinator. They'll invite their own Area Managers once active.</p>
       <div id="inviteMsg" class="form-msg"></div>
@@ -85,6 +92,15 @@
       <div id="pendingTableWrap"><div class="loading-line">Loading…</div></div>
     </div>
   </main>
+</div>
+
+<!-- Region-wide Sold / Lost collation: month above, year below — no client detail -->
+<div class="modal-overlay" id="regionOutcomeModal">
+  <div class="modal-box" style="max-width:560px;">
+    <h3 id="regionOutcomeModalTitle">Sold</h3>
+    <div id="regionOutcomeModalBody"><div class="loading-line">Loading…</div></div>
+    <button class="btn btn-ghost" id="closeRegionOutcomeModal" style="margin-top:14px;">Close</button>
+  </div>
 </div>
 
 <!-- RC sales/loss drill-down: client + policy/reason only, monthly -->
@@ -141,11 +157,13 @@
     query, where, serverTimestamp, Timestamp, orderBy
   } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js";
   import { guardPage, logout, genToken, inviteUrl, copyText, escapeHtml, fmtDate } from "./js/auth.js";
+  import { aggregateOutcomes, renderOutcomeAggregateHtml } from "./js/outcomes.js";
 
   let me = null;
   let allCoordinations = []; // [{id, name, coordinatorId}]
   let allAMs = []; // line_manager users under this region
   let allLines = []; // lines under this region, for coordination name lookups etc.
+  let allRegionProspects = []; // full prospect list for the whole region, for the Sold/Lost collation
 
   guardPage(["regional_head"], async (profile) => {
     me = profile;
@@ -156,6 +174,19 @@
   });
 
   document.getElementById("logoutBtn").addEventListener("click", logout);
+
+  // ---------------- Overview performance: Sold / Lost collation (no client detail) ----------------
+
+  function openRegionOutcomeModal(kind) {
+    document.getElementById("regionOutcomeModalTitle").textContent = kind === "sold" ? "Sold" : "Lost";
+    document.getElementById("regionOutcomeModal").classList.add("open");
+    const agg = aggregateOutcomes(allRegionProspects, kind);
+    document.getElementById("regionOutcomeModalBody").innerHTML = renderOutcomeAggregateHtml(agg, kind);
+  }
+
+  document.getElementById("viewSoldBtn").addEventListener("click", () => openRegionOutcomeModal("sold"));
+  document.getElementById("viewLostBtn").addEventListener("click", () => openRegionOutcomeModal("lost"));
+  document.getElementById("closeRegionOutcomeModal").addEventListener("click", () => document.getElementById("regionOutcomeModal").classList.remove("open"));
 
   function getOutcome(p) {
     if (p.outcome) return p.outcome;
@@ -196,8 +227,10 @@
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const prospectsSnap = await getDocs(query(collection(db, "prospects"), where("regionId", "==", me.regionId)));
+    allRegionProspects = [];
     prospectsSnap.forEach(p => {
       const d = p.data();
+      allRegionProspects.push({ id: p.id, ...d });
       const closedTs = d.closedAt || d.updatedAt;
       const o = getOutcome(d);
       if (o === "sold" && closedTs && closedTs.toDate() >= monthStart) soldCount++;
