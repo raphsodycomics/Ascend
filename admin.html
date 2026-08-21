@@ -35,6 +35,8 @@
       <div class="stat-card"><div class="stat-label">Regions</div><div class="stat-value" id="statRegions">–</div></div>
       <div class="stat-card"><div class="stat-label">Regional Coordinators</div><div class="stat-value" id="statRCs">–</div></div>
       <div class="stat-card"><div class="stat-label">Area Managers</div><div class="stat-value" id="statAMs">–</div></div>
+      <div class="stat-card"><div class="stat-label">Unit Managers</div><div class="stat-value" id="statUMs">–</div></div>
+      <div class="stat-card"><div class="stat-label">Financial Advisors</div><div class="stat-value" id="statFAs">–</div></div>
       <div class="stat-card accent"><div class="stat-label">Pending invitations</div><div class="stat-value" id="statPending">–</div></div>
     </div>
 
@@ -96,16 +98,20 @@
   document.getElementById("logoutBtn").addEventListener("click", logout);
 
   async function loadOverview() {
-    const [regionsSnap, rcSnap, amSnap, pendingSnap] = await Promise.all([
+    const [regionsSnap, rcSnap, amSnap, umSnap, faSnap, pendingSnap] = await Promise.all([
       getDocs(query(collection(db, "regions"), orderBy("createdAt", "desc"))),
       getDocs(query(collection(db, "users"), where("role", "==", "regional_coordinator"))),
       getDocs(query(collection(db, "users"), where("role", "==", "line_manager"))),
+      getDocs(query(collection(db, "users"), where("role", "==", "unit_manager"))),
+      getDocs(query(collection(db, "users"), where("role", "==", "fa"))),
       getDocs(query(collection(db, "invitations"), where("used", "==", false)))
     ]);
 
     document.getElementById("statRegions").textContent = regionsSnap.size;
     document.getElementById("statRCs").textContent = rcSnap.size;
     document.getElementById("statAMs").textContent = amSnap.size;
+    document.getElementById("statUMs").textContent = umSnap.size;
+    document.getElementById("statFAs").textContent = faSnap.size;
     document.getElementById("statPending").textContent = pendingSnap.size;
 
     renderRegions(regionsSnap);
