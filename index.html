@@ -39,26 +39,90 @@
   </div>
 </div>
 
-<!-- Manager-mediated recovery notice (Section 20): this pilot build shows the
-     principle — a real deploy would notify the requester's manager instead
-     of emailing a reset link directly. -->
+<!-- Self-service password reset, via Firebase Auth's built-in reset email.
+     No backend of our own needed: Firebase sends the email and hosts the
+     "choose a new password" page. -->
 <div class="modal-overlay" id="troubleModal">
   <div class="modal-box">
-    <h3>Trouble logging in?</h3>
+    <h3>Reset your password</h3>
     <p style="margin-bottom:16px;">
-      For your security, password resets are confirmed by your direct manager rather than emailed
-      straight to this device. Contact your Unit Manager, Line Manager, or the System Administrator
-      directly (phone or WhatsApp) and ask them to confirm your identity before a reset link is issued.
+      Enter the email your account was activated with. If it matches an ASCEND account, we'll send a
+      link to set a new password.
     </p>
-    <button class="btn btn-ghost" id="closeTrouble">Close</button>
+    <div id="resetMsg" class="form-msg"></div>
+    <form id="resetForm">
+      <label for="resetEmail">Email</label>
+      <input type="email" id="resetEmail" placeholder="you@heirslife.com" required autocomplete="username">
+      <button type="submit" class="btn btn-primary" id="resetBtn" style="margin-top:14px;">Send reset link</button>
+    </form>
+    <p style="margin-top:14px;color:var(--muted);font-size:13px;">
+      No luck? Contact your Unit Manager, Line Manager, or the System Administrator to confirm your identity.
+    </p>
+    <button class="btn btn-ghost" id="closeTrouble" style="margin-top:10px;">Close</button>
   </div>
 </div>
 
 <script type="module">
+  import { auth } from "./js/firebase-config.js";
+  import { sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+
   const troubleLink = document.getElementById("troubleLink");
   const troubleModal = document.getElementById("troubleModal");
-  troubleLink.addEventListener("click", (e) => { e.preventDefault(); troubleModal.classList.add("open"); });
+  const resetForm = document.getElementById("resetForm");
+  const resetMsg = document.getElementById("resetMsg");
+  const resetBtn = document.getElementById("resetBtn");
+  const resetEmailInput = document.getElementById("resetEmail");
+
+  troubleLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    resetMsg.className = "form-msg";
+    resetMsg.textContent = "";
+    resetForm.reset();
+    resetForm.style.display = "block";
+    resetBtn.disabled = false;
+    resetBtn.textContent = "Send reset link";
+    troubleModal.classList.add("open");
+  });
   document.getElementById("closeTrouble").addEventListener("click", () => troubleModal.classList.remove("open"));
+
+  resetForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    resetMsg.className = "form-msg";
+    resetBtn.disabled = true;
+    resetBtn.textContent = "Sending…";
+
+    const email = resetEmailInput.value.trim();
+
+    // Same confirmation message whether or not the email is registered —
+    // this stops the form being used to check who has an ASCEND account.
+    const genericSuccess = () => {
+      resetMsg.textContent = "If that email matches an ASCEND account, a reset link is on its way. Check your inbox (and spam folder).";
+      resetMsg.className = "form-msg success";
+      resetForm.style.display = "none";
+    };
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      genericSuccess();
+    } catch (err) {
+      console.error("Password reset error:", err);
+      if (err.code === "auth/user-not-found") {
+        // Deliberately shown as success — see note above.
+        genericSuccess();
+      } else if (err.code === "auth/invalid-email") {
+        resetMsg.textContent = "That doesn't look like a valid email address.";
+        resetMsg.className = "form-msg error";
+      } else if (err.code === "auth/too-many-requests") {
+        resetMsg.textContent = "Too many attempts. Please wait a bit before trying again.";
+        resetMsg.className = "form-msg error";
+      } else {
+        resetMsg.textContent = "Something went wrong sending the reset link. Please try again.";
+        resetMsg.className = "form-msg error";
+      }
+      resetBtn.disabled = false;
+      resetBtn.textContent = "Send reset link";
+    }
+  });
 </script>
 
 <!-- The one and only login handler. Do not add another script here that
