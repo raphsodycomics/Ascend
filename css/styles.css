@@ -224,7 +224,8 @@ textarea { resize: vertical; min-height: 70px; }
   color: #A8A8A8;
   margin-bottom: 4px;
 }
-.sidebar-name { font-weight: 600; margin-bottom: 24px; font-size: 14px; }
+.sidebar-name { font-weight: 600; margin-bottom: 4px; font-size: 14px; }
+.sidebar-meta { color: #A8A8A8; margin-bottom: 24px; font-size: 12px; line-height: 1.5; }
 
 /* Hamburger toggle — desktop keeps the nav always visible, so this stays
    hidden until the mobile breakpoint below turns it on. */
@@ -413,7 +414,7 @@ tr.clickable:hover { background: var(--red-tint); }
     -webkit-overflow-scrolling: touch;
   }
   .sidebar-brand { margin-bottom: 0; flex-shrink: 0; }
-  .sidebar-name, .sidebar-role { display: none; }
+  .sidebar-name, .sidebar-role, .sidebar-meta { display: none; }
 
   /* Hamburger becomes visible; the nav row it controls is hidden until tapped. */
   .sidebar-toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
