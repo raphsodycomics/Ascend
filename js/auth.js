@@ -30,6 +30,24 @@ export const ROLE_HOME = {
  * once the check has passed.
  */
 export function guardPage(allowedRoles, onReady) {
+  // Browsers can restore a page from the back/forward cache (bfcache) —
+  // a frozen snapshot of exactly how the page looked when you left it —
+  // instead of actually re-running this script. That means the auth
+  // check below would simply never fire again: pressing "forward" (or
+  // "back") could redisplay a dashboard page without re-verifying the
+  // session at all, even after signing out. Firebase's own auth
+  // listener doesn't survive a bfcache restore either, so relying on it
+  // alone isn't enough.
+  //
+  // The fix: the instant a bfcache restore is detected, force a genuine
+  // reload. That makes every back/forward navigation into this page
+  // re-run guardPage() from scratch, with no way to skip the check.
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+      window.location.reload();
+    }
+  });
+
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
       window.location.href = "index.html";
