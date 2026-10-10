@@ -2,7 +2,7 @@
 
 A working slice of the ASCEND CRM concept, scoped for a one-week test with your team:
 
-**Admin (you) → Regional Head → Regional Coordinator → Area Manager → Unit Manager → Financial Advisor**
+**Admin (you) → Regional Coordinator → Area Manager → Unit Manager → Financial Advisor**
 
 Each level invites the one below it. Nobody can sign up on their own — the login
 screen only has a login form, matching the invitation-only model in the concept doc.
@@ -61,9 +61,9 @@ entirely by filtering with `where()` and sorting client-side instead of combinin
 
 ## 4. Run the pilot
 
-1. Log in as Admin → **Invite a Regional Head** (this also creates their Region).
+1. Log in as Admin → **Invite a Regional Coordinator** (this also creates their Coordination).
 2. Copy the activation link it generates and send it to that person directly (WhatsApp, email — whatever you'd normally use). It works once and expires in 3 hours.
-3. They open the link, set a password, and land on their Regional Head dashboard, where they invite Regional Coordinators the same way (each invite creates a Coordination).
+3. They open the link, set a password, and land on their Regional Coordinator dashboard.
 4. Regional Coordinators invite Area Managers the same way (each invite creates a Line — "Area Manager" is the label used everywhere in the UI, though the underlying role is still called `line_manager`, see 4.5 below).
 5. Area Managers invite Unit Managers the same way.
 6. Unit Managers invite Financial Advisors the same way.
@@ -71,8 +71,7 @@ entirely by filtering with `where()` and sorting client-side instead of combinin
 
 Everyone only ever sees what the concept doc says they should see — an FA sees only
 their own prospects, a Unit Manager sees their unit, an Area Manager sees their whole
-Line, a Regional Coordinator sees their whole Coordination, a Regional Head sees
-their whole Region. This is enforced by `firestore.rules`, not just by hiding menu
+Line, a Regional Coordinator sees their whole Coordination, and the Admin sees everything. This is enforced by `firestore.rules`, not just by hiding menu
 items, so it holds even if someone edits a URL or opens dev tools.
 
 ## 4.5 Note on the hierarchy naming
@@ -89,15 +88,15 @@ see `lineId`/`line_manager`, that maps to "Area Manager" in every dashboard.
 
 Built for the pilot:
 - Invitation-only accounts, one level inviting the next (Sections 27.1–27.17)
-- Admin, Regional Head, Regional Coordinator, Area Manager, Unit Manager, Financial Advisor roles
+- Admin, Regional Coordinator, Area Manager, Unit Manager, Financial Advisor roles
 - FA quick prospect capture, pipeline stage, notes, outcome
 - Green/red daily submission status for managers
 - Weekly follow-up view, search, drill-down read-only visibility up the chain
 - Server-enforced access control (Section 27.7)
-- Collated Sold/Lost performance views (no client detail) at Area Manager, Regional Coordinator, and Regional Head level, reachable from the sidebar under Overview
+- Collated Sold/Lost performance views (no client detail) at Area Manager, Regional Coordinator, and Admin level, reachable from the sidebar under Overview
 - Manage/Reactivate/Suspend/Archive account actions, and Unit/Area Manager transfer between Lines or Coordinations
 - Mobile- and tablet-friendly layout (sidebar collapses to a scrollable top bar under 800px; tables scroll horizontally instead of breaking)
-- A 5-minute inactivity timeout on **every** dashboard (Admin, Regional Head, Regional Coordinator, Area Manager, Unit Manager, FA): after 5 minutes with no mouse/keyboard/touch/scroll activity, an on-screen 50-second countdown appears, and the user is signed out automatically if it reaches zero — `startInactivityTimer()` in `js/auth.js`, called once from inside each page's `guardPage` callback
+- A 5-minute inactivity timeout on **every** dashboard (Admin, Regional Coordinator, Area Manager, Unit Manager, FA): after 5 minutes with no mouse/keyboard/touch/scroll activity, an on-screen 50-second countdown appears, and the user is signed out automatically if it reaches zero — `startInactivityTimer()` in `js/auth.js`, called once from inside each page's `guardPage` callback
 - Self-service password reset: the "Trouble logging in?" link on the login screen sends a real reset email via Firebase Auth (`sendPasswordResetEmail`) — no manager involvement needed, no backend of our own required
 
 Deliberately left out for now (see Sections 21–22 of the concept doc for the full roadmap):
@@ -129,6 +128,14 @@ If invitation generation, login, or password reset shows an error, check the bro
 Fixes and additions made after the initial Region → Coordination → Area → Unit → FA
 restructuring:
 
+- **Regional Head layer removed** — the Admin now invites Regional Coordinators
+  directly (each invite creates a Coordination). `regional-head.html` and the
+  `regions` collection are gone; the Admin dashboard took over the Regional
+  Head's tools (Manage/Suspend/Archive a Coordinator, transfer an Area Manager
+  between Coordinations, per-Coordination sales/loss drill-down, Sold/Lost
+  collation). `regionId` is no longer written to any document, and
+  `firestore.rules` no longer knows the `regional_head` role — **re-paste and
+  Publish the rules** (see step 7 in Section 1).
 - **Regional Coordinator & Regional Head dashboards not loading** — both had a
   Firestore query combining `where()` with `orderBy()` on a different field, which
   needs a composite index that wasn't guaranteed to exist; when missing, the query
@@ -151,8 +158,8 @@ restructuring:
   touch/scroll activity, an on-screen 50-second countdown appears; if it reaches
   zero the user is signed out and redirected to the login page with an
   explanatory message. Built as a reusable `startInactivityTimer()` export in
-  `js/auth.js`, wired into all six dashboards (Admin, Regional Head, Regional
-  Coordinator, Area Manager, Unit Manager, FA) — worth knowing if you're
+  `js/auth.js`, wired into all five dashboards (Admin, Regional Coordinator,
+  Area Manager, Unit Manager, FA) — worth knowing if you're
   presenting a demo and plan to linger on one screen for 5+ minutes.
 - **Self-service password reset** — replaced the earlier manager-mediated
   stub with a real "Trouble logging in?" flow on the login screen, using
