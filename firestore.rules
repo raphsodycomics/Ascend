@@ -5,17 +5,17 @@ rules_version = '2';
 // an FA cannot read another FA's records, a Unit Manager cannot see outside
 // their unit, and roles can only be assigned through the invitation flow.
 //
-// Hierarchy: Admin -> Regional Head (region) -> Regional Coordinator
-// (coordination) -> Area Manager, stored as role "line_manager" (line) ->
-// Unit Manager (unit) -> Financial Advisor.
+// Hierarchy: Admin -> Regional Coordinator (coordination) -> Area Manager,
+// stored as role "line_manager" (line) -> Unit Manager (unit) -> Financial
+// Advisor.
 //
 // NOTE: this is scoped for a small, trusted group of managers creating
 // invitations. Before a company-wide rollout, have this reviewed — in
 // particular, harden invitation creation with App Check / Cloud Functions
 // instead of trusting client writes. "list" rules here deliberately check
 // only the caller's role (not resource.data), so every dashboard MUST keep
-// scoping its own list queries with where() on regionId/coordinationId/
-// lineId/unitId — this file trusts the client to do that, matching the
+// scoping its own list queries with where() on coordinationId/lineId/
+// unitId — this file trusts the client to do that, matching the
 // pilot-grade tradeoff already made for get()-level checks below.
 
 service cloud.firestore {
@@ -38,18 +38,17 @@ service cloud.firestore {
       allow get: if isSignedIn() && (
         request.auth.uid == userId ||
         myRole() == 'admin' ||
-        (myRole() == 'regional_head' && resource.data.regionId == myProfile().regionId) ||
         (myRole() == 'regional_coordinator' && resource.data.coordinationId == myProfile().coordinationId) ||
         (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
         (myRole() == 'unit_manager' && resource.data.unitId == myProfile().unitId)
       );
 
       allow list: if isSignedIn() && myRole() in [
-        'admin', 'regional_head', 'regional_coordinator', 'line_manager', 'unit_manager'
+        'admin', 'regional_coordinator', 'line_manager', 'unit_manager'
       ];
       // Firestore rules can't filter list-query results by field here, so we
       // additionally rely on the client always scoping list queries with a
-      // where() on regionId/coordinationId/lineId/unitId — combined with
+      // where() on coordinationId/lineId/unitId — combined with
       // get()-level checks above for any direct single-document reads.
       // Duplicate-email checks during invitation creation intentionally
       // query across all users, which is why this is role-only, not
@@ -58,12 +57,11 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.auth.uid == userId
         && request.resource.data.status == 'active'
-        && request.resource.data.role in ['regional_head', 'regional_coordinator', 'line_manager', 'unit_manager', 'fa'];
+        && request.resource.data.role in ['regional_coordinator', 'line_manager', 'unit_manager', 'fa'];
 
       allow update: if isSignedIn() && (
         request.auth.uid == userId ||
         myRole() == 'admin' ||
-        (myRole() == 'regional_head' && resource.data.regionId == myProfile().regionId) ||
         (myRole() == 'regional_coordinator' && resource.data.coordinationId == myProfile().coordinationId) ||
         (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
         (myRole() == 'unit_manager' && resource.data.unitId == myProfile().unitId)
@@ -72,41 +70,21 @@ service cloud.firestore {
       allow delete: if false; // accounts are deactivated, never deleted
     }
 
-    // ---------------- regions ----------------
-    match /regions/{regionId} {
+    // ---------------- coordinations ----------------
+    match /coordinations/{coordinationId} {
       allow get: if isSignedIn();
-      allow list: if isSignedIn() && myRole() == 'admin';
+      allow list: if isSignedIn() && myRole() in ['admin', 'regional_coordinator'];
 
       allow create: if isSignedIn() && myRole() == 'admin';
 
       allow update: if isSignedIn() && (
         myRole() == 'admin' ||
-        // a newly-activated Regional Head claiming the region they were invited to lead
-        (request.resource.data.regionalHeadId == request.auth.uid && resource.data.regionalHeadId == null)
-      );
-
-      // Only a Region still waiting on its first Regional Head may be deleted.
-      allow delete: if isSignedIn() && myRole() == 'admin' && resource.data.regionalHeadId == null;
-    }
-
-    // ---------------- coordinations ----------------
-    match /coordinations/{coordinationId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn() && myRole() in ['admin', 'regional_head', 'regional_coordinator'];
-
-      allow create: if isSignedIn() && myRole() == 'regional_head'
-        && request.resource.data.regionId == myProfile().regionId;
-
-      allow update: if isSignedIn() && (
-        myRole() == 'admin' ||
-        (myRole() == 'regional_head' && resource.data.regionId == myProfile().regionId) ||
         // a newly-activated Regional Coordinator claiming the coordination they were invited to lead
         (request.resource.data.coordinatorId == request.auth.uid && resource.data.coordinatorId == null)
       );
 
       // Only a Coordination still waiting on its first Regional Coordinator may be deleted.
-      allow delete: if isSignedIn() && myRole() == 'regional_head'
-        && resource.data.regionId == myProfile().regionId
+      allow delete: if isSignedIn() && myRole() == 'admin'
         && resource.data.coordinatorId == null;
     }
 
@@ -116,12 +94,10 @@ service cloud.firestore {
       allow list: if isSignedIn();
 
       allow create: if isSignedIn() && myRole() == 'regional_coordinator'
-        && request.resource.data.coordinationId == myProfile().coordinationId
-        && request.resource.data.regionId == myProfile().regionId;
+        && request.resource.data.coordinationId == myProfile().coordinationId;
 
       allow update: if isSignedIn() && (
         myRole() == 'admin' ||
-        (myRole() == 'regional_head' && resource.data.regionId == myProfile().regionId) ||
         (myRole() == 'regional_coordinator' && resource.data.coordinationId == myProfile().coordinationId) ||
         // a newly-activated Area Manager claiming the line they were invited to lead
         (request.resource.data.lineManagerId == request.auth.uid && resource.data.lineManagerId == null)
@@ -144,7 +120,6 @@ service cloud.firestore {
 
       allow update: if isSignedIn() && (
         myRole() == 'admin' ||
-        (myRole() == 'regional_head' && resource.data.regionId == myProfile().regionId) ||
         (myRole() == 'regional_coordinator' && resource.data.coordinationId == myProfile().coordinationId) ||
         (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
         // a newly-activated Unit Manager claiming the unit they were invited to lead
@@ -163,13 +138,11 @@ service cloud.firestore {
     match /invitations/{token} {
       allow get: if true;
       allow list: if isSignedIn() && myRole() in [
-        'admin', 'regional_head', 'regional_coordinator', 'line_manager', 'unit_manager'
+        'admin', 'regional_coordinator', 'line_manager', 'unit_manager'
       ];
 
       allow create: if isSignedIn() && (
-        (myRole() == 'admin' && request.resource.data.role == 'regional_head') ||
-        (myRole() == 'regional_head' && request.resource.data.role == 'regional_coordinator'
-          && request.resource.data.regionId == myProfile().regionId) ||
+        (myRole() == 'admin' && request.resource.data.role == 'regional_coordinator') ||
         (myRole() == 'regional_coordinator' && request.resource.data.role == 'line_manager'
           && request.resource.data.coordinationId == myProfile().coordinationId) ||
         (myRole() == 'line_manager' && request.resource.data.role == 'unit_manager'
@@ -188,7 +161,6 @@ service cloud.firestore {
       // only by the role that could have created it for that lineage.
       allow delete: if isSignedIn() && resource.data.used == false && (
         myRole() == 'admin' ||
-        (myRole() == 'regional_head' && resource.data.regionId == myProfile().regionId) ||
         (myRole() == 'regional_coordinator' && resource.data.coordinationId == myProfile().coordinationId) ||
         (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
         (myRole() == 'unit_manager' && resource.data.unitId == myProfile().unitId)
@@ -200,7 +172,6 @@ service cloud.firestore {
       allow get: if isSignedIn() && (
         resource.data.faId == request.auth.uid ||
         myRole() == 'admin' ||
-        (myRole() == 'regional_head' && resource.data.regionId == myProfile().regionId) ||
         (myRole() == 'regional_coordinator' && resource.data.coordinationId == myProfile().coordinationId) ||
         (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
         (myRole() == 'unit_manager' && resource.data.unitId == myProfile().unitId)
@@ -208,7 +179,7 @@ service cloud.firestore {
 
       allow list: if isSignedIn();
       // Client always scopes list queries with where('faId', '==', uid) or
-      // where('unitId'/'lineId'/'coordinationId'/'regionId', '==', ...)
+      // where('unitId'/'lineId'/'coordinationId', '==', ...)
       // matching the caller's own scope.
 
       allow create: if isSignedIn()
@@ -219,15 +190,14 @@ service cloud.firestore {
 
       // FAs update their own prospects (logging calls, marking sold/lost).
       // Managers also need update access here — not to touch outcomes, but
-      // because reassigning an FA (transfer between Units/Lines/Coordinations/
-      // Regions) carries that FA's prospects along with them, denormalizing
-      // the new unitId/lineId/coordinationId/regionId onto each prospect doc.
+      // because reassigning an FA (transfer between Units/Lines/Coordinations)
+      // carries that FA's prospects along with them, denormalizing
+      // the new unitId/lineId/coordinationId onto each prospect doc.
       // Scoped the same way the "get" rule above scopes reads, so a manager
       // can only touch prospects already inside their own branch of the tree.
       allow update: if isSignedIn() && (
         (myRole() == 'fa' && resource.data.faId == request.auth.uid) ||
         myRole() == 'admin' ||
-        (myRole() == 'regional_head' && resource.data.regionId == myProfile().regionId) ||
         (myRole() == 'regional_coordinator' && resource.data.coordinationId == myProfile().coordinationId) ||
         (myRole() == 'line_manager' && resource.data.lineId == myProfile().lineId) ||
         (myRole() == 'unit_manager' && resource.data.unitId == myProfile().unitId)
