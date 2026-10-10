@@ -16,7 +16,6 @@ import {
 
 export const ROLE_HOME = {
   admin: "admin.html",
-  regional_head: "regional-head.html",
   regional_coordinator: "regional-coordinator.html",
   line_manager: "line-manager.html",
   unit_manager: "unit-manager.html",
@@ -88,7 +87,6 @@ export function roleHome(role) {
 export function roleLabel(role) {
   return {
     admin: "System Administrator",
-    regional_head: "Regional Head",
     regional_coordinator: "Regional Coordinator",
     line_manager: "Area Manager",
     unit_manager: "Unit Manager",
