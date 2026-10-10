@@ -1,6 +1,6 @@
 // ============================================================
 // ASCEND — shared Sold/Lost collation helpers for the "Overview"
-// dashboards (Regional Head, Regional Coordinator, Area Manager).
+// dashboards (Admin, Regional Coordinator, Area Manager).
 // These never show a client name — only counts, grouped by policy
 // (for Sold) or reason (for Lost), for the current month and the
 // current year to date.
