@@ -87,7 +87,7 @@ export function roleHome(role) {
 export function roleLabel(role) {
   return {
     admin: "System Administrator",
-    regional_coordinator: "Regional Coordinator",
+    regional_coordinator: "Agency Manager",
     line_manager: "Area Manager",
     unit_manager: "Unit Manager",
     fa: "Financial Advisor"
