@@ -197,12 +197,12 @@
     startInactivityTimer();
   });
 
-  // Show which Region this Area Manager sits under.
+  // Show which Coordination this Area Manager sits under.
   async function loadHierarchyMeta() {
     try {
-      const regionSnap = me.regionId ? await getDoc(doc(db, "regions", me.regionId)) : null;
-      if (regionSnap && regionSnap.exists()) {
-        document.getElementById("sidebarMeta").textContent = "Region: " + regionSnap.data().name;
+      const coordSnap = me.coordinationId ? await getDoc(doc(db, "coordinations", me.coordinationId)) : null;
+      if (coordSnap && coordSnap.exists()) {
+        document.getElementById("sidebarMeta").textContent = "Coordination: " + coordSnap.data().name;
       }
     } catch (err) {
       console.error(err);
@@ -751,7 +751,6 @@
         name: unitName,
         lineId: me.lineId,
         coordinationId: me.coordinationId,
-        regionId: me.regionId,
         unitManagerId: null,
         createdBy: me.uid,
         createdAt: serverTimestamp()
@@ -767,7 +766,6 @@
         unitId: unitRef.id,
         lineId: me.lineId,
         coordinationId: me.coordinationId,
-        regionId: me.regionId,
         invitedByUid: me.uid,
         invitedByName: me.name,
         used: false,
