@@ -155,7 +155,7 @@
       <button type="button" class="btn btn-secondary" id="manageAmDeactivateBtn">Deactivate</button>
       <button type="button" class="btn btn-ghost" id="manageAmArchiveBtn" style="color:var(--red);">Archive</button>
     </div>
-    <p style="color:var(--muted);font-size:12px;margin-top:12px;">This only affects the Area Manager's own access — their Units and FAs keep their access either way. To move them to another Coordination, ask your Regional Head.</p>
+    <p style="color:var(--muted);font-size:12px;margin-top:12px;">This only affects the Area Manager's own access — their Units and FAs keep their access either way. To move them to another Coordination, ask your administrator.</p>
     <button type="button" class="btn btn-ghost" id="closeManageAmModal" style="margin-top:14px;">Close</button>
   </div>
 </div>
@@ -577,7 +577,7 @@
     btn.disabled = true; btn.textContent = "Transferring…";
     try {
       // Both source and destination Lines stay inside this Coordination, so
-      // only lineId changes here — coordinationId/regionId are untouched.
+      // only lineId changes here — coordinationId is untouched.
       const [fasSnap, prospectsSnap] = await Promise.all([
         getDocs(query(collection(db, "users"), where("unitId", "==", manageUnitId), where("role", "==", "fa"))),
         getDocs(query(collection(db, "prospects"), where("unitId", "==", manageUnitId)))
@@ -795,7 +795,6 @@
       const lineRef = await addDoc(collection(db, "lines"), {
         name: lineName,
         coordinationId: me.coordinationId,
-        regionId: me.regionId,
         lineManagerId: null,
         createdBy: me.uid,
         createdAt: serverTimestamp()
@@ -810,7 +809,6 @@
         role: "line_manager",
         lineId: lineRef.id,
         coordinationId: me.coordinationId,
-        regionId: me.regionId,
         invitedByUid: me.uid,
         invitedByName: me.name,
         used: false,
